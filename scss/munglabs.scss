@@ -44,13 +44,8 @@ $url_12: url(../fonts/komikaaxis_regular_macroman/KOMIKAX_-webfont.woff);
 $url_13: url(../fonts/komikaaxis_regular_macroman/KOMIKAX_-webfont.ttf);
 $url_14: url(../fonts/komikaaxis_regular_macroman/KOMIKAX_-webfont.svg#komika_axisregular);
 $url_15: url(../img/bg.png);
-$url_16: url(../img/intro-bg.jpg);
-$url_17: url(../img/paper.jpg);
-$url_18: url(../img/meanwhile-bg.jpg);
-$url_19: url(../img/downloads-bg.jpg);
-$url_20: url(../img/contact-bg.jpg);
-$url_21: url(../img/callout1.png);
-$url_22: url(../img/callout2.png);
+$url_16: url(../img/callout1.png);
+$url_17: url(../img/callout2.png);
 
 //@extend-elements
 //original selectors
@@ -180,6 +175,15 @@ section {
 	position: relative;
 	z-index: 2;
 }
+.body-styled {
+	width: 100%;
+	height: 100%;
+	font-family: Komika,"Helvetica Neue",Helvetica,Arial,sans-serif;
+	font-weight: normal;
+	background: $url_15 no-repeat center center scroll;
+	background-color: #000;
+	background-size: cover;
+}
 .body-skin {
 	width: 100%;
 	height: 100%;
@@ -282,7 +286,7 @@ section {
 	padding: 100px 0;
 	text-align: center;
 	color: $white;
-	background: $url_16 no-repeat bottom center scroll;
+	background: $url_15 no-repeat bottom center scroll;
 	background-color: $black;
 	background-size: cover;
 	.intro-body {
@@ -386,7 +390,7 @@ th {
 	}
 }
 .context {
-	background: $url_17 no-repeat center center scroll;
+	background: $url_15 no-repeat center center scroll;
 	background-color: $black;
 	background-size: cover;
 	padding: 5px;
@@ -409,28 +413,13 @@ th {
 	width: 100%;
 	padding: 20px 0;
 }
-.skin1 {
-	background: $url_18 no-repeat center center scroll;
-	background-color: $black;
-	background-size: cover;
-}
-.skin2 {
-	background: $url_19 no-repeat center center scroll;
-	background-color: $black;
-	background-size: cover;
-}
-.skin3 {
-	background: $url_20 no-repeat center center scroll;
-	background-color: $black;
-	background-size: cover;
-}
 .bubble1 {
-	background: $url_21 no-repeat center center scroll;
+	background: $url_16 no-repeat center center scroll;
 	background-color: transparent;
 	background-size: cover;
 }
 .bubble2 {
-	background: $url_22 no-repeat center center scroll;
+	background: $url_17 no-repeat center center scroll;
 	background-color: transparent;
 	background-size: cover;
 }
