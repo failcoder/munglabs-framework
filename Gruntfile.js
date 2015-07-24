@@ -37,7 +37,7 @@ module.exports = function(grunt) {
           'js/vendor/foundation/foundation.tooltip.js',
           'js/vendor/foundation/foundation.topbar.js'
         ],
-        dest: 'js/<%= pkg.name %>.js'
+        dest: 'js/munglabs.js'
       },
       // extras: {
       //   src: [
@@ -48,11 +48,11 @@ module.exports = function(grunt) {
     },
     uglify: {
       options: {
-        banner: '/*! <%= pkg.name %> <%= grunt.template.today("dd-mm-yyyy") %> */\n'
+        banner: '/*! munglabs <%= grunt.template.today("dd-mm-yyyy") %> */\n'
       },
       dist: {
         files: {
-          'js/<%= pkg.name %>.min.js': ['<%= concat.basic.dest %>'],
+          'js/munglabs.min.js': ['<%= concat.basic.dest %>'],
           //'js/<%= pkg.name %>-plugins.min.js': ['<%= concat.extras.dest %>']
         }
       }
@@ -77,10 +77,8 @@ module.exports = function(grunt) {
   grunt.loadNpmTasks('grunt-contrib-uglify');
   grunt.loadNpmTasks('grunt-contrib-concat');
 
-  grunt.registerTask('build', ['sass']);
+  grunt.registerTask('build', ['sass','concat','uglify']);
   grunt.registerTask('default', ['build','watch']);
   // grunt.registerTask('test', ['jshint', 'qunit']);
   // grunt.registerTask('default', ['jshint', 'qunit', 'concat', 'uglify']);
-
-  grunt.registerTask('default', ['concat', 'uglify']);
 };
