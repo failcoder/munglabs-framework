@@ -2,6 +2,7 @@
   "name": "munglabs-framework",
   "version": "1.0.0",
   "main": [
+    "css/normalize.css",
     "css/munglabs.css",
     "css/munglabs.css.map",
     "js/munglabs.js"

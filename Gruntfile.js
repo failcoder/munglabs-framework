@@ -78,7 +78,8 @@ module.exports = function(grunt) {
   grunt.loadNpmTasks('grunt-contrib-concat');
 
   grunt.registerTask('build', ['sass','concat','uglify']);
-  grunt.registerTask('default', ['build','watch']);
+  grunt.registerTask('default', ['build']);
+  // grunt.registerTask('default', ['build','watch']);
   // grunt.registerTask('test', ['jshint', 'qunit']);
   // grunt.registerTask('default', ['jshint', 'qunit', 'concat', 'uglify']);
 };
