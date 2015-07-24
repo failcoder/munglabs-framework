@@ -19,7 +19,6 @@
     "jquery.autocomplete": "devbridge/jQuery-Autocomplete#1.2.9",
     "lodash": "~2.4.1"
   },
-  "private": true,
   "homepage": "https://github.com/failcoder/munglabs-framework.git",
   "_release": "1.0.0",
   "_source": "git://github.com/failcoder/munglabs-framework.git",
