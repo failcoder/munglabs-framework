@@ -183,6 +183,9 @@ section {
 	background: $url_15 no-repeat center center scroll;
 	background-color: #000;
 	background-size: cover;
+	> footer {
+		background-color: $black;
+	}
 }
 .body-skin {
 	width: 100%;
@@ -469,7 +472,6 @@ th {
 }
 footer {
 	padding: 5px 0;
-	background-color: $black;
 	z-index: 5;
 }
 .vid {
