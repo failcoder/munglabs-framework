@@ -76,15 +76,15 @@ $url_17: url(../img/callout2.png);
 //a:hover, a:focus
 %extend_3 {
 	text-decoration: none;
-	color: $yellow;
+	color: $color_cyan_aqua_approx;
 	//Instead of the line below you could use @include text-shadow($shadow-1, $shadow-2, $shadow-3, $shadow-4, $shadow-5, $shadow-6, $shadow-7, $shadow-8, $shadow-9, $shadow-10)
-	text-shadow: -1px -1px 8px $color_blaze_orange_approx;
+	text-shadow: -1px -1px 8px $color_electric_violet_approx;
 }
 
 //original selectors
 //.navbar-custom .nav li a:hover, .navbar-custom .nav li a:focus, .navbar-custom .nav li a.active
 %extend_4 {
-	color: $yellow;
+	color: $color_cyan_aqua_approx;
 	outline: 0;
 	background-color: $white_30;
 }
@@ -95,7 +95,7 @@ $url_17: url(../img/callout2.png);
 	border: 1px solid transparent;
 	outline: 0;
 	background-color: transparent;
-	color: $yellow;
+	color: $color_cyan_aqua_approx;
 }
 
 //original selectors
