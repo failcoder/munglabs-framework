@@ -15,7 +15,7 @@
 *    | $$   | $$     /$$__  $| $$ | $$ | $| $$_____| $$ | $$ | $| $$  | $| $$     | $$_  $$
 *    | $$   | $$    |  $$$$$$| $$ | $$ | $|  $$$$$$|  $$$$$/$$$$|  $$$$$$| $$     | $$ \  $$
 *    |__/   |__/     \_______|__/ |__/ |__/\_______/\_____/\___/ \______/|__/     |__/  \__/
-*                                                                                          
+*
  *
  *
  *  Failcoder Framework
@@ -36,31 +36,4 @@
  *
  */
 
-@import "material/variables";
-@import "material/mixins";
-@import "material/resets/resets";
-@import "material/typography/typography";
-@import "material/palette/palette";
-@import "material/ripple/ripple";
-@import "material/animation/animation";
-@import "material/badge/badge";
-@import "material/button/button";
-@import "material/card/card";
-@import "material/checkbox/checkbox";
-@import "material/datatable/datatable";
-@import "material/footer/footer";
-@import "material/icon/icon";
-@import "material/menu/menu";
-@import "material/progress/progress";
-@import "material/layout/layout";
-@import "material/radio/radio";
-@import "material/slider/slider";
-@import "material/spinner/spinner";
-@import "material/switch/switch";
-@import "material/tabs/tabs";
-@import "material/textfield/textfield";
-@import "material/tooltip/tooltip";
-@import "material/shadow/shadow";
-@import "material/grid/grid";
-@import "material/skins/skins";
-@import "material/custom/custom";
+@import "../../../bower_components/munglabs-framework/scss/init.scss";
