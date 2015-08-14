@@ -1,0 +1,29 @@
+@import "../variables";
+/***
+ *                       /$$                        /$$    /$$
+ *                      |__/                       | $$   |__/
+ *      /$$$$$$ /$$$$$$$ /$$/$$$$$$/$$$$  /$$$$$$ /$$$$$$  /$$ /$$$$$$ /$$$$$$$
+ *     |____  $| $$__  $| $| $$_  $$_  $$|____  $|_  $$_/ | $$/$$__  $| $$__  $$
+ *      /$$$$$$| $$  \ $| $| $$ \ $$ \ $$ /$$$$$$$ | $$   | $| $$  \ $| $$  \ $$
+ *     /$$__  $| $$  | $| $| $$ | $$ | $$/$$__  $$ | $$ /$| $| $$  | $| $$  | $$
+ *    |  $$$$$$| $$  | $| $| $$ | $$ | $|  $$$$$$$ |  $$$$| $|  $$$$$$| $$  | $$
+ *     \_______|__/  |__|__|__/ |__/ |__/\_______/  \___/ |__/\______/|__/  |__/
+ *
+ *
+ *
+ */
+.animate-default {
+  transition-timing-function: $animation-curve-default;
+}
+
+.animate-fast-out-slow-in {
+  transition-timing-function: $animation-curve-fast-out-slow-in;
+}
+
+.animate-linear-out-slow-in {
+  transition-timing-function: $animation-curve-linear-out-slow-in;
+}
+
+.animate-fast-out-linear-in {
+  transition-timing-function: $animation-curve-fast-out-linear-in;
+}

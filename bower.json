@@ -1,10 +1,11 @@
 {
   "name": "munglabs-framework",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": [
-    "css/munglabs.css",
-    "css/munglabs.css.map",
-    "js/munglabs.js"
+    "css/munglabs.min.css",
+    "css/munglabs.min.css.map",
+    "js/munglabs.min.js",
+    "js/munglabs.min.js.map"
   ],
   "ignore": [
   ],

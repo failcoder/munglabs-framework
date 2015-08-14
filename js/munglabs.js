@@ -1,6376 +1,3968 @@
-/*
- * Foundation Responsive Library
- * http://foundation.zurb.com
- * Copyright 2014, ZURB
- * Free to use under the MIT license.
- * http://www.opensource.org/licenses/mit-license.php
-*/
-
-(function ($, window, document, undefined) {
+var componentHandler = (function() {
   'use strict';
 
-  var header_helpers = function (class_array) {
-    var i = class_array.length;
-    var head = $('head');
+  var registeredComponents_ = [];
+  var createdComponents_ = [];
+  var downgradeMethod_ = 'coreDowngrade_';
+  var componentConfigProperty_ = 'coreComponentConfigInternal_';
 
-    while (i--) {
-      if (head.has('.' + class_array[i]).length === 0) {
-        head.append('<meta class="' + class_array[i] + '" />');
-      }
-    }
-  };
-
-  header_helpers([
-    'foundation-mq-small',
-    'foundation-mq-small-only',
-    'foundation-mq-medium',
-    'foundation-mq-medium-only',
-    'foundation-mq-large',
-    'foundation-mq-large-only',
-    'foundation-mq-xlarge',
-    'foundation-mq-xlarge-only',
-    'foundation-mq-xxlarge',
-    'foundation-data-attribute-namespace']);
-
-  // Enable FastClick if present
-
-  $(function () {
-    if (typeof FastClick !== 'undefined') {
-      // Don't attach to body if undefined
-      if (typeof document.body !== 'undefined') {
-        FastClick.attach(document.body);
-      }
-    }
-  });
-
-  // private Fast Selector wrapper,
-  // returns jQuery object. Only use where
-  // getElementById is not available.
-  var S = function (selector, context) {
-    if (typeof selector === 'string') {
-      if (context) {
-        var cont;
-        if (context.jquery) {
-          cont = context[0];
-          if (!cont) {
-            return context;
-          }
-        } else {
-          cont = context;
-        }
-        return $(cont.querySelectorAll(selector));
-      }
-
-      return $(document.querySelectorAll(selector));
-    }
-
-    return $(selector, context);
-  };
-
-  // Namespace functions.
-
-  var attr_name = function (init) {
-    var arr = [];
-    if (!init) {
-      arr.push('data');
-    }
-    if (this.namespace.length > 0) {
-      arr.push(this.namespace);
-    }
-    arr.push(this.name);
-
-    return arr.join('-');
-  };
-
-  var add_namespace = function (str) {
-    var parts = str.split('-'),
-        i = parts.length,
-        arr = [];
-
-    while (i--) {
-      if (i !== 0) {
-        arr.push(parts[i]);
-      } else {
-        if (this.namespace.length > 0) {
-          arr.push(this.namespace, parts[i]);
-        } else {
-          arr.push(parts[i]);
-        }
-      }
-    }
-
-    return arr.reverse().join('-');
-  };
-
-  // Event binding and data-options updating.
-
-  var bindings = function (method, options) {
-    var self = this,
-        bind = function(){
-          var $this = S(this),
-              should_bind_events = !$this.data(self.attr_name(true) + '-init');
-          $this.data(self.attr_name(true) + '-init', $.extend({}, self.settings, (options || method), self.data_options($this)));
-
-          if (should_bind_events) {
-            self.events(this);
-          }
-        };
-
-    if (S(this.scope).is('[' + this.attr_name() +']')) {
-      bind.call(this.scope);
-    } else {
-      S('[' + this.attr_name() +']', this.scope).each(bind);
-    }
-    // # Patch to fix #5043 to move this *after* the if/else clause in order for Backbone and similar frameworks to have improved control over event binding and data-options updating.
-    if (typeof method === 'string') {
-      return this[method].call(this, options);
-    }
-
-  };
-
-  var single_image_loaded = function (image, callback) {
-    function loaded () {
-      callback(image[0]);
-    }
-
-    function bindLoad () {
-      this.one('load', loaded);
-
-      if (/MSIE (\d+\.\d+);/.test(navigator.userAgent)) {
-        var src = this.attr( 'src' ),
-            param = src.match( /\?/ ) ? '&' : '?';
-
-        param += 'random=' + (new Date()).getTime();
-        this.attr('src', src + param);
-      }
-    }
-
-    if (!image.attr('src')) {
-      loaded();
-      return;
-    }
-
-    if (image[0].complete || image[0].readyState === 4) {
-      loaded();
-    } else {
-      bindLoad.call(image);
-    }
-  };
-
-  /*! matchMedia() polyfill - Test a CSS media type/query in JS. Authors & copyright (c) 2012: Scott Jehl, Paul Irish, Nicholas Zakas, David Knight. Dual MIT/BSD license */
-
-  window.matchMedia || (window.matchMedia = function() {
-      "use strict";
-
-      // For browsers that support matchMedium api such as IE 9 and webkit
-      var styleMedia = (window.styleMedia || window.media);
-
-      // For those that don't support matchMedium
-      if (!styleMedia) {
-          var style       = document.createElement('style'),
-              script      = document.getElementsByTagName('script')[0],
-              info        = null;
-
-          style.type  = 'text/css';
-          style.id    = 'matchmediajs-test';
-
-          script.parentNode.insertBefore(style, script);
-
-          // 'style.currentStyle' is used by IE <= 8 and 'window.getComputedStyle' for all other browsers
-          info = ('getComputedStyle' in window) && window.getComputedStyle(style, null) || style.currentStyle;
-
-          styleMedia = {
-              matchMedium: function(media) {
-                  var text = '@media ' + media + '{ #matchmediajs-test { width: 1px; } }';
-
-                  // 'style.styleSheet' is used by IE <= 8 and 'style.textContent' for all other browsers
-                  if (style.styleSheet) {
-                      style.styleSheet.cssText = text;
-                  } else {
-                      style.textContent = text;
-                  }
-
-                  // Test if media query is true or false
-                  return info.width === '1px';
-              }
-          };
-      }
-
-      return function(media) {
-          return {
-              matches: styleMedia.matchMedium(media || 'all'),
-              media: media || 'all'
-          };
-      };
-  }());
-
-  /*
-   * jquery.requestAnimationFrame
-   * https://github.com/gnarf37/jquery-requestAnimationFrame
-   * Requires jQuery 1.8+
-   *
-   * Copyright (c) 2012 Corey Frang
-   * Licensed under the MIT license.
+  /**
+   * Searches registered components for a class we are interested in using.
+   * Optionally replaces a match with passed object if specified.
+   * @param {string} name The name of a class we want to use.
+   * @param {Object=} optReplace Optional object to replace match with.
+   * @return {Object | boolean}
+   * @private
    */
-
-  (function(jQuery) {
-
-
-  // requestAnimationFrame polyfill adapted from Erik Möller
-  // fixes from Paul Irish and Tino Zijdel
-  // http://paulirish.com/2011/requestanimationframe-for-smart-animating/
-  // http://my.opera.com/emoller/blog/2011/12/20/requestanimationframe-for-smart-er-animating
-
-  var animating,
-      lastTime = 0,
-      vendors = ['webkit', 'moz'],
-      requestAnimationFrame = window.requestAnimationFrame,
-      cancelAnimationFrame = window.cancelAnimationFrame,
-      jqueryFxAvailable = 'undefined' !== typeof jQuery.fx;
-
-  for (; lastTime < vendors.length && !requestAnimationFrame; lastTime++) {
-    requestAnimationFrame = window[ vendors[lastTime] + 'RequestAnimationFrame' ];
-    cancelAnimationFrame = cancelAnimationFrame ||
-      window[ vendors[lastTime] + 'CancelAnimationFrame' ] ||
-      window[ vendors[lastTime] + 'CancelRequestAnimationFrame' ];
+  function findRegisteredClass_(name, optReplace) {
+    for (var i = 0; i < registeredComponents_.length; i++) {
+      if (registeredComponents_[i].className === name) {
+        if (optReplace !== undefined) {
+          registeredComponents_[i] = optReplace;
+        }
+        return registeredComponents_[i];
+      }
+    }
+    return false;
   }
 
-  function raf() {
-    if (animating) {
-      requestAnimationFrame(raf);
+  /**
+   * Returns an array of the classNames of the upgraded classes on the element.
+   * @param {HTMLElement} element The element to fetch data from.
+   * @return {Array<string>}
+   * @private
+   */
+  function getUpgradedListOfElement_(element) {
+    var dataUpgraded = element.getAttribute('data-upgraded');
+    // Use `['']` as default value to conform the `,name,name...` style.
+    return dataUpgraded === null ? [''] : dataUpgraded.split(',');
+  }
 
-      if (jqueryFxAvailable) {
-        jQuery.fx.tick();
+  /**
+   * Returns true if the given element has already been upgraded for the given
+   * class.
+   * @param {HTMLElement} element The element we want to check.
+   * @param {string} jsClass The class to check for.
+   * @return boolean
+   * @private
+   */
+  function isElementUpgraded_(element, jsClass) {
+    var upgradedList = getUpgradedListOfElement_(element);
+    return upgradedList.indexOf(jsClass) !== -1;
+  }
+
+  /**
+   * Searches existing DOM for elements of our component type and upgrades them
+   * if they have not already been upgraded.
+   * @param {!string=} optJsClass the programatic name of the element class we
+   * need to create a new instance of.
+   * @param {!string=} optCssClass the name of the CSS class elements of this
+   * type will have.
+   */
+  function upgradeDomInternal(optJsClass, optCssClass) {
+    if (optJsClass === undefined && optCssClass === undefined) {
+      for (var i = 0; i < registeredComponents_.length; i++) {
+        upgradeDomInternal(registeredComponents_[i].className,
+            registeredComponents_[i].cssClass);
+      }
+    } else {
+      var jsClass = /** @type {!string} */ (optJsClass);
+      if (optCssClass === undefined) {
+        var registeredClass = findRegisteredClass_(jsClass);
+        if (registeredClass) {
+          optCssClass = registeredClass.cssClass;
+        }
+      }
+
+      var elements = document.querySelectorAll('.' + optCssClass);
+      for (var n = 0; n < elements.length; n++) {
+        upgradeElementInternal(elements[n], jsClass);
       }
     }
   }
 
-  if (requestAnimationFrame) {
-    // use rAF
-    window.requestAnimationFrame = requestAnimationFrame;
-    window.cancelAnimationFrame = cancelAnimationFrame;
-
-    if (jqueryFxAvailable) {
-      jQuery.fx.timer = function (timer) {
-        if (timer() && jQuery.timers.push(timer) && !animating) {
-          animating = true;
-          raf();
+  /**
+   * Upgrades a specific element rather than all in the DOM.
+   * @param {HTMLElement} element The element we wish to upgrade.
+   * @param {!string=} optJsClass Optional name of the class we want to upgrade
+   * the element to.
+   */
+  function upgradeElementInternal(element, optJsClass) {
+    // Verify argument type.
+    if (!(typeof element === 'object' && element instanceof Element)) {
+      throw new Error('Invalid argument provided to upgrade element.');
+    }
+    var upgradedList = getUpgradedListOfElement_(element);
+    var classesToUpgrade = [];
+    // If jsClass is not provided scan the registered components to find the
+    // ones matching the element's CSS classList.
+    if (!optJsClass) {
+      var classList = element.classList;
+      registeredComponents_.forEach(function (component) {
+        // Match CSS & Not to be upgraded & Not upgraded.
+        if (classList.contains(component.cssClass) &&
+            classesToUpgrade.indexOf(component) === -1 &&
+            !isElementUpgraded_(element, component.className)) {
+          classesToUpgrade.push(component);
         }
-      };
-
-      jQuery.fx.stop = function () {
-        animating = false;
-      };
-    }
-  } else {
-    // polyfill
-    window.requestAnimationFrame = function (callback) {
-      var currTime = new Date().getTime(),
-        timeToCall = Math.max(0, 16 - (currTime - lastTime)),
-        id = window.setTimeout(function () {
-          callback(currTime + timeToCall);
-        }, timeToCall);
-      lastTime = currTime + timeToCall;
-      return id;
-    };
-
-    window.cancelAnimationFrame = function (id) {
-      clearTimeout(id);
-    };
-
-  }
-
-  }( $ ));
-
-  function removeQuotes (string) {
-    if (typeof string === 'string' || string instanceof String) {
-      string = string.replace(/^['\\/"]+|(;\s?})+|['\\/"]+$/g, '');
+      });
+    } else if (!isElementUpgraded_(element, optJsClass)) {
+      classesToUpgrade.push(findRegisteredClass_(optJsClass));
     }
 
-    return string;
-  }
+    // Upgrade the element for each classes.
+    for (var i = 0, n = classesToUpgrade.length, registeredClass; i < n; i++) {
+      registeredClass = classesToUpgrade[i];
+      if (registeredClass) {
+        // Mark element as upgraded.
+        upgradedList.push(registeredClass.className);
+        element.setAttribute('data-upgraded', upgradedList.join(','));
+        var instance = new registeredClass.classConstructor(element);
+        instance[componentConfigProperty_] = registeredClass;
+        createdComponents_.push(instance);
+        // Call any callbacks the user has registered with this component type.
+        for (var j = 0, m = registeredClass.callbacks.length; j < m; j++) {
+          registeredClass.callbacks[j](element);
+        }
 
-  window.Foundation = {
-    name : 'Foundation',
-
-    version : '5.5.2',
-
-    media_queries : {
-      'small'       : S('.foundation-mq-small').css('font-family').replace(/^[\/\\'"]+|(;\s?})+|[\/\\'"]+$/g, ''),
-      'small-only'  : S('.foundation-mq-small-only').css('font-family').replace(/^[\/\\'"]+|(;\s?})+|[\/\\'"]+$/g, ''),
-      'medium'      : S('.foundation-mq-medium').css('font-family').replace(/^[\/\\'"]+|(;\s?})+|[\/\\'"]+$/g, ''),
-      'medium-only' : S('.foundation-mq-medium-only').css('font-family').replace(/^[\/\\'"]+|(;\s?})+|[\/\\'"]+$/g, ''),
-      'large'       : S('.foundation-mq-large').css('font-family').replace(/^[\/\\'"]+|(;\s?})+|[\/\\'"]+$/g, ''),
-      'large-only'  : S('.foundation-mq-large-only').css('font-family').replace(/^[\/\\'"]+|(;\s?})+|[\/\\'"]+$/g, ''),
-      'xlarge'      : S('.foundation-mq-xlarge').css('font-family').replace(/^[\/\\'"]+|(;\s?})+|[\/\\'"]+$/g, ''),
-      'xlarge-only' : S('.foundation-mq-xlarge-only').css('font-family').replace(/^[\/\\'"]+|(;\s?})+|[\/\\'"]+$/g, ''),
-      'xxlarge'     : S('.foundation-mq-xxlarge').css('font-family').replace(/^[\/\\'"]+|(;\s?})+|[\/\\'"]+$/g, '')
-    },
-
-    stylesheet : $('<style></style>').appendTo('head')[0].sheet,
-
-    global : {
-      namespace : undefined
-    },
-
-    init : function (scope, libraries, method, options, response) {
-      var args = [scope, method, options, response],
-          responses = [];
-
-      // check RTL
-      this.rtl = /rtl/i.test(S('html').attr('dir'));
-
-      // set foundation global scope
-      this.scope = scope || this.scope;
-
-      this.set_namespace();
-
-      if (libraries && typeof libraries === 'string' && !/reflow/i.test(libraries)) {
-        if (this.libs.hasOwnProperty(libraries)) {
-          responses.push(this.init_lib(libraries, args));
+        if (registeredClass.widget) {
+          // Assign per element instance for control over API
+          element[registeredClass.className] = instance;
         }
       } else {
-        for (var lib in this.libs) {
-          responses.push(this.init_lib(lib, libraries));
-        }
+        throw new Error(
+          'Unable to find a registered component for the given class.');
       }
 
-      S(window).load(function () {
-        S(window)
-          .trigger('resize.fndtn.clearing')
-          .trigger('resize.fndtn.dropdown')
-          .trigger('resize.fndtn.equalizer')
-          .trigger('resize.fndtn.interchange')
-          .trigger('resize.fndtn.joyride')
-          .trigger('resize.fndtn.magellan')
-          .trigger('resize.fndtn.topbar')
-          .trigger('resize.fndtn.slider');
-      });
+      var ev = document.createEvent('Events');
+      ev.initEvent('componentupgraded', true, true);
+      element.dispatchEvent(ev);
+    }
+  }
 
-      return scope;
-    },
-
-    init_lib : function (lib, args) {
-      if (this.libs.hasOwnProperty(lib)) {
-        this.patch(this.libs[lib]);
-
-        if (args && args.hasOwnProperty(lib)) {
-            if (typeof this.libs[lib].settings !== 'undefined') {
-              $.extend(true, this.libs[lib].settings, args[lib]);
-            } else if (typeof this.libs[lib].defaults !== 'undefined') {
-              $.extend(true, this.libs[lib].defaults, args[lib]);
-            }
-          return this.libs[lib].init.apply(this.libs[lib], [this.scope, args[lib]]);
-        }
-
-        args = args instanceof Array ? args : new Array(args);
-        return this.libs[lib].init.apply(this.libs[lib], args);
-      }
-
-      return function () {};
-    },
-
-    patch : function (lib) {
-      lib.scope = this.scope;
-      lib.namespace = this.global.namespace;
-      lib.rtl = this.rtl;
-      lib['data_options'] = this.utils.data_options;
-      lib['attr_name'] = attr_name;
-      lib['add_namespace'] = add_namespace;
-      lib['bindings'] = bindings;
-      lib['S'] = this.utils.S;
-    },
-
-    inherit : function (scope, methods) {
-      var methods_arr = methods.split(' '),
-          i = methods_arr.length;
-
-      while (i--) {
-        if (this.utils.hasOwnProperty(methods_arr[i])) {
-          scope[methods_arr[i]] = this.utils[methods_arr[i]];
-        }
-      }
-    },
-
-    set_namespace : function () {
-
-      // Description:
-      //    Don't bother reading the namespace out of the meta tag
-      //    if the namespace has been set globally in javascript
-      //
-      // Example:
-      //    Foundation.global.namespace = 'my-namespace';
-      // or make it an empty string:
-      //    Foundation.global.namespace = '';
-      //
-      //
-
-      // If the namespace has not been set (is undefined), try to read it out of the meta element.
-      // Otherwise use the globally defined namespace, even if it's empty ('')
-      var namespace = ( this.global.namespace === undefined ) ? $('.foundation-data-attribute-namespace').css('font-family') : this.global.namespace;
-
-      // Finally, if the namsepace is either undefined or false, set it to an empty string.
-      // Otherwise use the namespace value.
-      this.global.namespace = ( namespace === undefined || /false/i.test(namespace) ) ? '' : namespace;
-    },
-
-    libs : {},
-
-    // methods that can be inherited in libraries
-    utils : {
-
-      // Description:
-      //    Fast Selector wrapper returns jQuery object. Only use where getElementById
-      //    is not available.
-      //
-      // Arguments:
-      //    Selector (String): CSS selector describing the element(s) to be
-      //    returned as a jQuery object.
-      //
-      //    Scope (String): CSS selector describing the area to be searched. Default
-      //    is document.
-      //
-      // Returns:
-      //    Element (jQuery Object): jQuery object containing elements matching the
-      //    selector within the scope.
-      S : S,
-
-      // Description:
-      //    Executes a function a max of once every n milliseconds
-      //
-      // Arguments:
-      //    Func (Function): Function to be throttled.
-      //
-      //    Delay (Integer): Function execution threshold in milliseconds.
-      //
-      // Returns:
-      //    Lazy_function (Function): Function with throttling applied.
-      throttle : function (func, delay) {
-        var timer = null;
-
-        return function () {
-          var context = this, args = arguments;
-
-          if (timer == null) {
-            timer = setTimeout(function () {
-              func.apply(context, args);
-              timer = null;
-            }, delay);
-          }
-        };
-      },
-
-      // Description:
-      //    Executes a function when it stops being invoked for n seconds
-      //    Modified version of _.debounce() http://underscorejs.org
-      //
-      // Arguments:
-      //    Func (Function): Function to be debounced.
-      //
-      //    Delay (Integer): Function execution threshold in milliseconds.
-      //
-      //    Immediate (Bool): Whether the function should be called at the beginning
-      //    of the delay instead of the end. Default is false.
-      //
-      // Returns:
-      //    Lazy_function (Function): Function with debouncing applied.
-      debounce : function (func, delay, immediate) {
-        var timeout, result;
-        return function () {
-          var context = this, args = arguments;
-          var later = function () {
-            timeout = null;
-            if (!immediate) {
-              result = func.apply(context, args);
-            }
-          };
-          var callNow = immediate && !timeout;
-          clearTimeout(timeout);
-          timeout = setTimeout(later, delay);
-          if (callNow) {
-            result = func.apply(context, args);
-          }
-          return result;
-        };
-      },
-
-      // Description:
-      //    Parses data-options attribute
-      //
-      // Arguments:
-      //    El (jQuery Object): Element to be parsed.
-      //
-      // Returns:
-      //    Options (Javascript Object): Contents of the element's data-options
-      //    attribute.
-      data_options : function (el, data_attr_name) {
-        data_attr_name = data_attr_name || 'options';
-        var opts = {}, ii, p, opts_arr,
-            data_options = function (el) {
-              var namespace = Foundation.global.namespace;
-
-              if (namespace.length > 0) {
-                return el.data(namespace + '-' + data_attr_name);
-              }
-
-              return el.data(data_attr_name);
-            };
-
-        var cached_options = data_options(el);
-
-        if (typeof cached_options === 'object') {
-          return cached_options;
-        }
-
-        opts_arr = (cached_options || ':').split(';');
-        ii = opts_arr.length;
-
-        function isNumber (o) {
-          return !isNaN (o - 0) && o !== null && o !== '' && o !== false && o !== true;
-        }
-
-        function trim (str) {
-          if (typeof str === 'string') {
-            return $.trim(str);
-          }
-          return str;
-        }
-
-        while (ii--) {
-          p = opts_arr[ii].split(':');
-          p = [p[0], p.slice(1).join(':')];
-
-          if (/true/i.test(p[1])) {
-            p[1] = true;
-          }
-          if (/false/i.test(p[1])) {
-            p[1] = false;
-          }
-          if (isNumber(p[1])) {
-            if (p[1].indexOf('.') === -1) {
-              p[1] = parseInt(p[1], 10);
-            } else {
-              p[1] = parseFloat(p[1]);
-            }
-          }
-
-          if (p.length === 2 && p[0].length > 0) {
-            opts[trim(p[0])] = trim(p[1]);
-          }
-        }
-
-        return opts;
-      },
-
-      // Description:
-      //    Adds JS-recognizable media queries
-      //
-      // Arguments:
-      //    Media (String): Key string for the media query to be stored as in
-      //    Foundation.media_queries
-      //
-      //    Class (String): Class name for the generated <meta> tag
-      register_media : function (media, media_class) {
-        if (Foundation.media_queries[media] === undefined) {
-          $('head').append('<meta class="' + media_class + '"/>');
-          Foundation.media_queries[media] = removeQuotes($('.' + media_class).css('font-family'));
-        }
-      },
-
-      // Description:
-      //    Add custom CSS within a JS-defined media query
-      //
-      // Arguments:
-      //    Rule (String): CSS rule to be appended to the document.
-      //
-      //    Media (String): Optional media query string for the CSS rule to be
-      //    nested under.
-      add_custom_rule : function (rule, media) {
-        if (media === undefined && Foundation.stylesheet) {
-          Foundation.stylesheet.insertRule(rule, Foundation.stylesheet.cssRules.length);
-        } else {
-          var query = Foundation.media_queries[media];
-
-          if (query !== undefined) {
-            Foundation.stylesheet.insertRule('@media ' +
-              Foundation.media_queries[media] + '{ ' + rule + ' }', Foundation.stylesheet.cssRules.length);
-          }
-        }
-      },
-
-      // Description:
-      //    Performs a callback function when an image is fully loaded
-      //
-      // Arguments:
-      //    Image (jQuery Object): Image(s) to check if loaded.
-      //
-      //    Callback (Function): Function to execute when image is fully loaded.
-      image_loaded : function (images, callback) {
-        var self = this,
-            unloaded = images.length;
-
-        function pictures_has_height(images) {
-          var pictures_number = images.length;
-
-          for (var i = pictures_number - 1; i >= 0; i--) {
-            if(images.attr('height') === undefined) {
-              return false;
-            };
-          };
-
-          return true;
-        }
-
-        if (unloaded === 0 || pictures_has_height(images)) {
-          callback(images);
-        }
-
-        images.each(function () {
-          single_image_loaded(self.S(this), function () {
-            unloaded -= 1;
-            if (unloaded === 0) {
-              callback(images);
-            }
-          });
-        });
-      },
-
-      // Description:
-      //    Returns a random, alphanumeric string
-      //
-      // Arguments:
-      //    Length (Integer): Length of string to be generated. Defaults to random
-      //    integer.
-      //
-      // Returns:
-      //    Rand (String): Pseudo-random, alphanumeric string.
-      random_str : function () {
-        if (!this.fidx) {
-          this.fidx = 0;
-        }
-        this.prefix = this.prefix || [(this.name || 'F'), (+new Date).toString(36)].join('-');
-
-        return this.prefix + (this.fidx++).toString(36);
-      },
-
-      // Description:
-      //    Helper for window.matchMedia
-      //
-      // Arguments:
-      //    mq (String): Media query
-      //
-      // Returns:
-      //    (Boolean): Whether the media query passes or not
-      match : function (mq) {
-        return window.matchMedia(mq).matches;
-      },
-
-      // Description:
-      //    Helpers for checking Foundation default media queries with JS
-      //
-      // Returns:
-      //    (Boolean): Whether the media query passes or not
-
-      is_small_up : function () {
-        return this.match(Foundation.media_queries.small);
-      },
-
-      is_medium_up : function () {
-        return this.match(Foundation.media_queries.medium);
-      },
-
-      is_large_up : function () {
-        return this.match(Foundation.media_queries.large);
-      },
-
-      is_xlarge_up : function () {
-        return this.match(Foundation.media_queries.xlarge);
-      },
-
-      is_xxlarge_up : function () {
-        return this.match(Foundation.media_queries.xxlarge);
-      },
-
-      is_small_only : function () {
-        return !this.is_medium_up() && !this.is_large_up() && !this.is_xlarge_up() && !this.is_xxlarge_up();
-      },
-
-      is_medium_only : function () {
-        return this.is_medium_up() && !this.is_large_up() && !this.is_xlarge_up() && !this.is_xxlarge_up();
-      },
-
-      is_large_only : function () {
-        return this.is_medium_up() && this.is_large_up() && !this.is_xlarge_up() && !this.is_xxlarge_up();
-      },
-
-      is_xlarge_only : function () {
-        return this.is_medium_up() && this.is_large_up() && this.is_xlarge_up() && !this.is_xxlarge_up();
-      },
-
-      is_xxlarge_only : function () {
-        return this.is_medium_up() && this.is_large_up() && this.is_xlarge_up() && this.is_xxlarge_up();
+  /**
+   * Upgrades a specific list of elements rather than all in the DOM.
+   * @param {HTMLElement | Array<HTMLElement> | NodeList | HTMLCollection} elements
+   * The elements we wish to upgrade.
+   */
+  function upgradeElementsInternal(elements) {
+    if (!Array.isArray(elements)) {
+      if (typeof elements.item === 'function') {
+        elements = Array.prototype.slice.call(elements);
+      } else {
+        elements = [elements];
       }
     }
-  };
+    for (var i = 0, n = elements.length, element; i < n; i++) {
+      element = elements[i];
+      if (element instanceof HTMLElement) {
+        if (element.children.length > 0) {
+          upgradeElementsInternal(element.children);
+        }
+        upgradeElementInternal(element);
+      }
+    }
+  }
 
-  $.fn.foundation = function () {
-    var args = Array.prototype.slice.call(arguments, 0);
+  /**
+   * Registers a class for future use and attempts to upgrade existing DOM.
+   * @param {Object} config An object containing:
+   * {constructor: Constructor, classAsString: string, cssClass: string}
+   */
+  function registerInternal(config) {
+    var newConfig = {
+      'classConstructor': config.constructor,
+      'className': config.classAsString,
+      'cssClass': config.cssClass,
+      'widget': config.widget === undefined ? true : config.widget,
+      'callbacks': []
+    };
 
-    return this.each(function () {
-      Foundation.init.apply(Foundation, [this].concat(args));
-      return this;
+    registeredComponents_.forEach(function(item) {
+      if (item.cssClass === newConfig.cssClass) {
+        throw new Error('The provided cssClass has already been registered.');
+      }
+      if (item.className === newConfig.className) {
+        throw new Error('The provided className has already been registered');
+      }
     });
-  };
 
-}(jQuery, window, window.document));
-;;(function ($, window, document, undefined) {
-  'use strict';
-
-  Foundation.libs.abide = {
-    name : 'abide',
-
-    version : '5.5.2',
-
-    settings : {
-      live_validate : true,
-      validate_on_blur : true,
-      // validate_on: 'tab', // tab (when user tabs between fields), change (input changes), manual (call custom events) 
-      focus_on_invalid : true,
-      error_labels : true, // labels with a for="inputId" will recieve an `error` class
-      error_class : 'error',
-      timeout : 1000,
-      patterns : {
-        alpha : /^[a-zA-Z]+$/,
-        alpha_numeric : /^[a-zA-Z0-9]+$/,
-        integer : /^[-+]?\d+$/,
-        number : /^[-+]?\d*(?:[\.\,]\d+)?$/,
-
-        // amex, visa, diners
-        card : /^(?:4[0-9]{12}(?:[0-9]{3})?|5[1-5][0-9]{14}|6(?:011|5[0-9][0-9])[0-9]{12}|3[47][0-9]{13}|3(?:0[0-5]|[68][0-9])[0-9]{11}|(?:2131|1800|35\d{3})\d{11})$/,
-        cvv : /^([0-9]){3,4}$/,
-
-        // http://www.whatwg.org/specs/web-apps/current-work/multipage/states-of-the-type-attribute.html#valid-e-mail-address
-        email : /^[a-zA-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/,
-
-        // http://blogs.lse.ac.uk/lti/2008/04/23/a-regular-expression-to-match-any-url/
-        url: /^(https?|ftp|file|ssh):\/\/([-;:&=\+\$,\w]+@{1})?([-A-Za-z0-9\.]+)+:?(\d+)?((\/[-\+~%\/\.\w]+)?\??([-\+=&;%@\.\w]+)?#?([\w]+)?)?/,
-        // abc.de
-        domain : /^([a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,8}$/,
-
-        datetime : /^([0-2][0-9]{3})\-([0-1][0-9])\-([0-3][0-9])T([0-5][0-9])\:([0-5][0-9])\:([0-5][0-9])(Z|([\-\+]([0-1][0-9])\:00))$/,
-        // YYYY-MM-DD
-        date : /(?:19|20)[0-9]{2}-(?:(?:0[1-9]|1[0-2])-(?:0[1-9]|1[0-9]|2[0-9])|(?:(?!02)(?:0[1-9]|1[0-2])-(?:30))|(?:(?:0[13578]|1[02])-31))$/,
-        // HH:MM:SS
-        time : /^(0[0-9]|1[0-9]|2[0-3])(:[0-5][0-9]){2}$/,
-        dateISO : /^\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}$/,
-        // MM/DD/YYYY
-        month_day_year : /^(0[1-9]|1[012])[- \/.](0[1-9]|[12][0-9]|3[01])[- \/.]\d{4}$/,
-        // DD/MM/YYYY
-        day_month_year : /^(0[1-9]|[12][0-9]|3[01])[- \/.](0[1-9]|1[012])[- \/.]\d{4}$/,
-
-        // #FFF or #FFFFFF
-        color : /^#?([a-fA-F0-9]{6}|[a-fA-F0-9]{3})$/
-      },
-      validators : {
-        equalTo : function (el, required, parent) {
-          var from  = document.getElementById(el.getAttribute(this.add_namespace('data-equalto'))).value,
-              to    = el.value,
-              valid = (from === to);
-
-          return valid;
-        }
-      }
-    },
-
-    timer : null,
-
-    init : function (scope, method, options) {
-      this.bindings(method, options);
-    },
-
-    events : function (scope) {
-      var self = this,
-          form = self.S(scope).attr('novalidate', 'novalidate'),
-          settings = form.data(this.attr_name(true) + '-init') || {};
-
-      this.invalid_attr = this.add_namespace('data-invalid');
-
-      function validate(originalSelf, e) {
-        clearTimeout(self.timer);
-        self.timer = setTimeout(function () {
-          self.validate([originalSelf], e);
-        }.bind(originalSelf), settings.timeout);
-      }
-
-
-      form
-        .off('.abide')
-        .on('submit.fndtn.abide', function (e) {
-          var is_ajax = /ajax/i.test(self.S(this).attr(self.attr_name()));
-          return self.validate(self.S(this).find('input, textarea, select').not(":hidden, [data-abide-ignore]").get(), e, is_ajax);
-        })
-        .on('validate.fndtn.abide', function (e) {
-          if (settings.validate_on === 'manual') {
-            self.validate([e.target], e);
-          }
-        })
-        .on('reset', function (e) {
-          return self.reset($(this), e);          
-        })
-        .find('input, textarea, select').not(":hidden, [data-abide-ignore]")
-          .off('.abide')
-          .on('blur.fndtn.abide change.fndtn.abide', function (e) {
-            // old settings fallback
-            // will be deprecated with F6 release
-            if (settings.validate_on_blur && settings.validate_on_blur === true) {
-              validate(this, e);
-            }
-            // new settings combining validate options into one setting
-            if (settings.validate_on === 'change') {
-              validate(this, e);
-            }
-          })
-          .on('keydown.fndtn.abide', function (e) {
-            // old settings fallback
-            // will be deprecated with F6 release
-            if (settings.live_validate && settings.live_validate === true && e.which != 9) {
-              validate(this, e);
-            }
-            // new settings combining validate options into one setting
-            if (settings.validate_on === 'tab' && e.which === 9) {
-              validate(this, e);
-            }
-            else if (settings.validate_on === 'change') {
-              validate(this, e);
-            }
-          })
-          .on('focus', function (e) {
-            if (navigator.userAgent.match(/iPad|iPhone|Android|BlackBerry|Windows Phone|webOS/i)) {
-              $('html, body').animate({
-                  scrollTop: $(e.target).offset().top
-              }, 100);
-            } 
-          });
-    },
-
-    reset : function (form, e) {
-      var self = this;
-      form.removeAttr(self.invalid_attr);
-
-      $('[' + self.invalid_attr + ']', form).removeAttr(self.invalid_attr);
-      $('.' + self.settings.error_class, form).not('small').removeClass(self.settings.error_class);
-      $(':input', form).not(':button, :submit, :reset, :hidden, [data-abide-ignore]').val('').removeAttr(self.invalid_attr);
-    },
-
-    validate : function (els, e, is_ajax) {
-      var validations = this.parse_patterns(els),
-          validation_count = validations.length,
-          form = this.S(els[0]).closest('form'),
-          submit_event = /submit/.test(e.type);
-
-      // Has to count up to make sure the focus gets applied to the top error
-      for (var i = 0; i < validation_count; i++) {
-        if (!validations[i] && (submit_event || is_ajax)) {
-          if (this.settings.focus_on_invalid) {
-            els[i].focus();
-          }
-          form.trigger('invalid.fndtn.abide');
-          this.S(els[i]).closest('form').attr(this.invalid_attr, '');
-          return false;
-        }
-      }
-
-      if (submit_event || is_ajax) {
-        form.trigger('valid.fndtn.abide');
-      }
-
-      form.removeAttr(this.invalid_attr);
-
-      if (is_ajax) {
-        return false;
-      }
-
-      return true;
-    },
-
-    parse_patterns : function (els) {
-      var i = els.length,
-          el_patterns = [];
-
-      while (i--) {
-        el_patterns.push(this.pattern(els[i]));
-      }
-
-      return this.check_validation_and_apply_styles(el_patterns);
-    },
-
-    pattern : function (el) {
-      var type = el.getAttribute('type'),
-          required = typeof el.getAttribute('required') === 'string';
-
-      var pattern = el.getAttribute('pattern') || '';
-
-      if (this.settings.patterns.hasOwnProperty(pattern) && pattern.length > 0) {
-        return [el, this.settings.patterns[pattern], required];
-      } else if (pattern.length > 0) {
-        return [el, new RegExp(pattern), required];
-      }
-
-      if (this.settings.patterns.hasOwnProperty(type)) {
-        return [el, this.settings.patterns[type], required];
-      }
-
-      pattern = /.*/;
-
-      return [el, pattern, required];
-    },
-
-    // TODO: Break this up into smaller methods, getting hard to read.
-    check_validation_and_apply_styles : function (el_patterns) {
-      var i = el_patterns.length,
-          validations = [],
-          form = this.S(el_patterns[0][0]).closest('[data-' + this.attr_name(true) + ']'),
-          settings = form.data(this.attr_name(true) + '-init') || {};
-      while (i--) {
-        var el = el_patterns[i][0],
-            required = el_patterns[i][2],
-            value = el.value.trim(),
-            direct_parent = this.S(el).parent(),
-            validator = el.getAttribute(this.add_namespace('data-abide-validator')),
-            is_radio = el.type === 'radio',
-            is_checkbox = el.type === 'checkbox',
-            label = this.S('label[for="' + el.getAttribute('id') + '"]'),
-            valid_length = (required) ? (el.value.length > 0) : true,
-            el_validations = [];
-
-        var parent, valid;
-
-        // support old way to do equalTo validations
-        if (el.getAttribute(this.add_namespace('data-equalto'))) { validator = 'equalTo' }
-
-        if (!direct_parent.is('label')) {
-          parent = direct_parent;
-        } else {
-          parent = direct_parent.parent();
-        }
-
-        if (is_radio && required) {
-          el_validations.push(this.valid_radio(el, required));
-        } else if (is_checkbox && required) {
-          el_validations.push(this.valid_checkbox(el, required));
-
-        } else if (validator) {
-          // Validate using each of the specified (space-delimited) validators.
-          var validators = validator.split(' ');
-          var last_valid = true, all_valid = true;
-          for (var iv = 0; iv < validators.length; iv++) {
-              valid = this.settings.validators[validators[iv]].apply(this, [el, required, parent])
-              el_validations.push(valid);
-              all_valid = valid && last_valid;
-              last_valid = valid;
-          }
-          if (all_valid) {
-              this.S(el).removeAttr(this.invalid_attr);
-              parent.removeClass('error');
-              if (label.length > 0 && this.settings.error_labels) {
-                label.removeClass(this.settings.error_class).removeAttr('role');
-              }
-              $(el).triggerHandler('valid');
-          } else {
-              this.S(el).attr(this.invalid_attr, '');
-              parent.addClass('error');
-              if (label.length > 0 && this.settings.error_labels) {
-                label.addClass(this.settings.error_class).attr('role', 'alert');
-              }
-              $(el).triggerHandler('invalid');
-          }
-        } else {
-
-          if (el_patterns[i][1].test(value) && valid_length ||
-            !required && el.value.length < 1 || $(el).attr('disabled')) {
-            el_validations.push(true);
-          } else {
-            el_validations.push(false);
-          }
-
-          el_validations = [el_validations.every(function (valid) {return valid;})];
-          if (el_validations[0]) {
-            this.S(el).removeAttr(this.invalid_attr);
-            el.setAttribute('aria-invalid', 'false');
-            el.removeAttribute('aria-describedby');
-            parent.removeClass(this.settings.error_class);
-            if (label.length > 0 && this.settings.error_labels) {
-              label.removeClass(this.settings.error_class).removeAttr('role');
-            }
-            $(el).triggerHandler('valid');
-          } else {
-            this.S(el).attr(this.invalid_attr, '');
-            el.setAttribute('aria-invalid', 'true');
-
-            // Try to find the error associated with the input
-            var errorElem = parent.find('small.' + this.settings.error_class, 'span.' + this.settings.error_class);
-            var errorID = errorElem.length > 0 ? errorElem[0].id : '';
-            if (errorID.length > 0) {
-              el.setAttribute('aria-describedby', errorID);
-            }
-
-            // el.setAttribute('aria-describedby', $(el).find('.error')[0].id);
-            parent.addClass(this.settings.error_class);
-            if (label.length > 0 && this.settings.error_labels) {
-              label.addClass(this.settings.error_class).attr('role', 'alert');
-            }
-            $(el).triggerHandler('invalid');
-          }
-        }
-        validations = validations.concat(el_validations);
-      }
-      return validations;
-    },
-
-    valid_checkbox : function (el, required) {
-      var el = this.S(el),
-          valid = (el.is(':checked') || !required || el.get(0).getAttribute('disabled'));
-
-      if (valid) {
-        el.removeAttr(this.invalid_attr).parent().removeClass(this.settings.error_class);
-        $(el).triggerHandler('valid');
-      } else {
-        el.attr(this.invalid_attr, '').parent().addClass(this.settings.error_class);
-        $(el).triggerHandler('invalid');
-      }
-
-      return valid;
-    },
-
-    valid_radio : function (el, required) {
-      var name = el.getAttribute('name'),
-          group = this.S(el).closest('[data-' + this.attr_name(true) + ']').find("[name='" + name + "']"),
-          count = group.length,
-          valid = false,
-          disabled = false;
-
-      // Has to count up to make sure the focus gets applied to the top error
-        for (var i=0; i < count; i++) {
-            if( group[i].getAttribute('disabled') ){
-                disabled=true;
-                valid=true;
-            } else {
-                if (group[i].checked){
-                    valid = true;
-                } else {
-                    if( disabled ){
-                        valid = false;
-                    }
-                }
-            }
-        }
-
-      // Has to count up to make sure the focus gets applied to the top error
-      for (var i = 0; i < count; i++) {
-        if (valid) {
-          this.S(group[i]).removeAttr(this.invalid_attr).parent().removeClass(this.settings.error_class);
-          $(group[i]).triggerHandler('valid');
-        } else {
-          this.S(group[i]).attr(this.invalid_attr, '').parent().addClass(this.settings.error_class);
-          $(group[i]).triggerHandler('invalid');
-        }
-      }
-
-      return valid;
-    },
-
-    valid_equal : function (el, required, parent) {
-      var from  = document.getElementById(el.getAttribute(this.add_namespace('data-equalto'))).value,
-          to    = el.value,
-          valid = (from === to);
-
-      if (valid) {
-        this.S(el).removeAttr(this.invalid_attr);
-        parent.removeClass(this.settings.error_class);
-        if (label.length > 0 && settings.error_labels) {
-          label.removeClass(this.settings.error_class);
-        }
-      } else {
-        this.S(el).attr(this.invalid_attr, '');
-        parent.addClass(this.settings.error_class);
-        if (label.length > 0 && settings.error_labels) {
-          label.addClass(this.settings.error_class);
-        }
-      }
-
-      return valid;
-    },
-
-    valid_oneof : function (el, required, parent, doNotValidateOthers) {
-      var el = this.S(el),
-        others = this.S('[' + this.add_namespace('data-oneof') + ']'),
-        valid = others.filter(':checked').length > 0;
-
-      if (valid) {
-        el.removeAttr(this.invalid_attr).parent().removeClass(this.settings.error_class);
-      } else {
-        el.attr(this.invalid_attr, '').parent().addClass(this.settings.error_class);
-      }
-
-      if (!doNotValidateOthers) {
-        var _this = this;
-        others.each(function () {
-          _this.valid_oneof.call(_this, this, null, null, true);
-        });
-      }
-
-      return valid;
-    },
-
-    reflow : function(scope, options) {
-      var self = this,
-          form = self.S('[' + this.attr_name() + ']').attr('novalidate', 'novalidate');
-          self.S(form).each(function (idx, el) {
-            self.events(el);
-          });
-    }
-  };
-}(jQuery, window, window.document));
-;;(function ($, window, document, undefined) {
-  'use strict';
-
-  Foundation.libs.accordion = {
-    name : 'accordion',
-
-    version : '5.5.2',
-
-    settings : {
-      content_class : 'content',
-      active_class : 'active',
-      multi_expand : false,
-      toggleable : true,
-      callback : function () {}
-    },
-
-    init : function (scope, method, options) {
-      this.bindings(method, options);
-    },
-
-    events : function (instance) {
-      var self = this;
-      var S = this.S;
-      self.create(this.S(instance));
-
-      S(this.scope)
-      .off('.fndtn.accordion')
-      .on('click.fndtn.accordion', '[' + this.attr_name() + '] > dd > a, [' + this.attr_name() + '] > li > a', function (e) {
-        var accordion = S(this).closest('[' + self.attr_name() + ']'),
-            groupSelector = self.attr_name() + '=' + accordion.attr(self.attr_name()),
-            settings = accordion.data(self.attr_name(true) + '-init') || self.settings,
-            target = S('#' + this.href.split('#')[1]),
-            aunts = $('> dd, > li', accordion),
-            siblings = aunts.children('.' + settings.content_class),
-            active_content = siblings.filter('.' + settings.active_class);
-
-        e.preventDefault();
-
-        if (accordion.attr(self.attr_name())) {
-          siblings = siblings.add('[' + groupSelector + '] dd > ' + '.' + settings.content_class + ', [' + groupSelector + '] li > ' + '.' + settings.content_class);
-          aunts = aunts.add('[' + groupSelector + '] dd, [' + groupSelector + '] li');
-        }
-
-        if (settings.toggleable && target.is(active_content)) {
-          target.parent('dd, li').toggleClass(settings.active_class, false);
-          target.toggleClass(settings.active_class, false);
-          S(this).attr('aria-expanded', function(i, attr){
-              return attr === 'true' ? 'false' : 'true';
-          });
-          settings.callback(target);
-          target.triggerHandler('toggled', [accordion]);
-          accordion.triggerHandler('toggled', [target]);
-          return;
-        }
-
-        if (!settings.multi_expand) {
-          siblings.removeClass(settings.active_class);
-          aunts.removeClass(settings.active_class);
-          aunts.children('a').attr('aria-expanded','false');
-        }
-
-        target.addClass(settings.active_class).parent().addClass(settings.active_class);
-        settings.callback(target);
-        target.triggerHandler('toggled', [accordion]);
-        accordion.triggerHandler('toggled', [target]);
-        S(this).attr('aria-expanded','true');
-      });
-    },
-
-    create: function($instance) {
-      var self = this,
-          accordion = $instance,
-          aunts = $('> .accordion-navigation', accordion),
-          settings = accordion.data(self.attr_name(true) + '-init') || self.settings;
-
-      aunts.children('a').attr('aria-expanded','false');
-      aunts.has('.' + settings.content_class + '.' + settings.active_class).children('a').attr('aria-expanded','true');
-
-      if (settings.multi_expand) {
-        $instance.attr('aria-multiselectable','true');
-      }
-    },
-
-    off : function () {},
-
-    reflow : function () {}
-  };
-}(jQuery, window, window.document));
-;;(function ($, window, document, undefined) {
-  'use strict';
-
-  Foundation.libs.alert = {
-    name : 'alert',
-
-    version : '5.5.2',
-
-    settings : {
-      callback : function () {}
-    },
-
-    init : function (scope, method, options) {
-      this.bindings(method, options);
-    },
-
-    events : function () {
-      var self = this,
-          S = this.S;
-
-      $(this.scope).off('.alert').on('click.fndtn.alert', '[' + this.attr_name() + '] .close', function (e) {
-        var alertBox = S(this).closest('[' + self.attr_name() + ']'),
-            settings = alertBox.data(self.attr_name(true) + '-init') || self.settings;
-
-        e.preventDefault();
-        if (Modernizr.csstransitions) {
-          alertBox.addClass('alert-close');
-          alertBox.on('transitionend webkitTransitionEnd oTransitionEnd', function (e) {
-            S(this).trigger('close.fndtn.alert').remove();
-            settings.callback();
-          });
-        } else {
-          alertBox.fadeOut(300, function () {
-            S(this).trigger('close.fndtn.alert').remove();
-            settings.callback();
-          });
-        }
-      });
-    },
-
-    reflow : function () {}
-  };
-}(jQuery, window, window.document));
-;;(function ($, window, document, undefined) {
-  'use strict';
-
-  Foundation.libs.clearing = {
-    name : 'clearing',
-
-    version : '5.5.2',
-
-    settings : {
-      templates : {
-        viewing : '<a href="#" class="clearing-close">&times;</a>' +
-          '<div class="visible-img" style="display: none"><div class="clearing-touch-label"></div><img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs%3D" alt="" />' +
-          '<p class="clearing-caption"></p><a href="#" class="clearing-main-prev"><span></span></a>' +
-          '<a href="#" class="clearing-main-next"><span></span></a></div>' +
-          '<img class="clearing-preload-next" style="display: none" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs%3D" alt="" />' +
-          '<img class="clearing-preload-prev" style="display: none" src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs%3D" alt="" />'
-      },
-
-      // comma delimited list of selectors that, on click, will close clearing,
-      // add 'div.clearing-blackout, div.visible-img' to close on background click
-      close_selectors : '.clearing-close, div.clearing-blackout',
-
-      // Default to the entire li element.
-      open_selectors : '',
-
-      // Image will be skipped in carousel.
-      skip_selector : '',
-
-      touch_label : '',
-
-      // event initializers and locks
-      init : false,
-      locked : false
-    },
-
-    init : function (scope, method, options) {
-      var self = this;
-      Foundation.inherit(this, 'throttle image_loaded');
-
-      this.bindings(method, options);
-
-      if (self.S(this.scope).is('[' + this.attr_name() + ']')) {
-        this.assemble(self.S('li', this.scope));
-      } else {
-        self.S('[' + this.attr_name() + ']', this.scope).each(function () {
-          self.assemble(self.S('li', this));
-        });
-      }
-    },
-
-    events : function (scope) {
-      var self = this,
-          S = self.S,
-          $scroll_container = $('.scroll-container');
-
-      if ($scroll_container.length > 0) {
-        this.scope = $scroll_container;
-      }
-
-      S(this.scope)
-        .off('.clearing')
-        .on('click.fndtn.clearing', 'ul[' + this.attr_name() + '] li ' + this.settings.open_selectors,
-          function (e, current, target) {
-            var current = current || S(this),
-                target = target || current,
-                next = current.next('li'),
-                settings = current.closest('[' + self.attr_name() + ']').data(self.attr_name(true) + '-init'),
-                image = S(e.target);
-
-            e.preventDefault();
-
-            if (!settings) {
-              self.init();
-              settings = current.closest('[' + self.attr_name() + ']').data(self.attr_name(true) + '-init');
-            }
-
-            // if clearing is open and the current image is
-            // clicked, go to the next image in sequence
-            if (target.hasClass('visible') &&
-              current[0] === target[0] &&
-              next.length > 0 && self.is_open(current)) {
-              target = next;
-              image = S('img', target);
-            }
-
-            // set current and target to the clicked li if not otherwise defined.
-            self.open(image, current, target);
-            self.update_paddles(target);
-          })
-
-        .on('click.fndtn.clearing', '.clearing-main-next',
-          function (e) { self.nav(e, 'next') })
-        .on('click.fndtn.clearing', '.clearing-main-prev',
-          function (e) { self.nav(e, 'prev') })
-        .on('click.fndtn.clearing', this.settings.close_selectors,
-          function (e) { Foundation.libs.clearing.close(e, this) });
-
-      $(document).on('keydown.fndtn.clearing',
-          function (e) { self.keydown(e) });
-
-      S(window).off('.clearing').on('resize.fndtn.clearing',
-        function () { self.resize() });
-
-      this.swipe_events(scope);
-    },
-
-    swipe_events : function (scope) {
-      var self = this,
-      S = self.S;
-
-      S(this.scope)
-        .on('touchstart.fndtn.clearing', '.visible-img', function (e) {
-          if (!e.touches) { e = e.originalEvent; }
-          var data = {
-                start_page_x : e.touches[0].pageX,
-                start_page_y : e.touches[0].pageY,
-                start_time : (new Date()).getTime(),
-                delta_x : 0,
-                is_scrolling : undefined
-              };
-
-          S(this).data('swipe-transition', data);
-          e.stopPropagation();
-        })
-        .on('touchmove.fndtn.clearing', '.visible-img', function (e) {
-          if (!e.touches) {
-            e = e.originalEvent;
-          }
-          // Ignore pinch/zoom events
-          if (e.touches.length > 1 || e.scale && e.scale !== 1) {
-            return;
-          }
-
-          var data = S(this).data('swipe-transition');
-
-          if (typeof data === 'undefined') {
-            data = {};
-          }
-
-          data.delta_x = e.touches[0].pageX - data.start_page_x;
-
-          if (Foundation.rtl) {
-            data.delta_x = -data.delta_x;
-          }
-
-          if (typeof data.is_scrolling === 'undefined') {
-            data.is_scrolling = !!( data.is_scrolling || Math.abs(data.delta_x) < Math.abs(e.touches[0].pageY - data.start_page_y) );
-          }
-
-          if (!data.is_scrolling && !data.active) {
-            e.preventDefault();
-            var direction = (data.delta_x < 0) ? 'next' : 'prev';
-            data.active = true;
-            self.nav(e, direction);
-          }
-        })
-        .on('touchend.fndtn.clearing', '.visible-img', function (e) {
-          S(this).data('swipe-transition', {});
-          e.stopPropagation();
-        });
-    },
-
-    assemble : function ($li) {
-      var $el = $li.parent();
-
-      if ($el.parent().hasClass('carousel')) {
-        return;
-      }
-
-      $el.after('<div id="foundationClearingHolder"></div>');
-
-      var grid = $el.detach(),
-          grid_outerHTML = '';
-
-      if (grid[0] == null) {
-        return;
-      } else {
-        grid_outerHTML = grid[0].outerHTML;
-      }
-
-      var holder = this.S('#foundationClearingHolder'),
-          settings = $el.data(this.attr_name(true) + '-init'),
-          data = {
-            grid : '<div class="carousel">' + grid_outerHTML + '</div>',
-            viewing : settings.templates.viewing
-          },
-          wrapper = '<div class="clearing-assembled"><div>' + data.viewing +
-            data.grid + '</div></div>',
-          touch_label = this.settings.touch_label;
-
-      if (Modernizr.touch) {
-        wrapper = $(wrapper).find('.clearing-touch-label').html(touch_label).end();
-      }
-
-      holder.after(wrapper).remove();
-    },
-
-    open : function ($image, current, target) {
-      var self = this,
-          body = $(document.body),
-          root = target.closest('.clearing-assembled'),
-          container = self.S('div', root).first(),
-          visible_image = self.S('.visible-img', container),
-          image = self.S('img', visible_image).not($image),
-          label = self.S('.clearing-touch-label', container),
-          error = false,
-          loaded = {};
-
-      // Event to disable scrolling on touch devices when Clearing is activated
-      $('body').on('touchmove', function (e) {
-        e.preventDefault();
-      });
-
-      image.error(function () {
-        error = true;
-      });
-
-      function startLoad() {
-        setTimeout(function () {
-          this.image_loaded(image, function () {
-            if (image.outerWidth() === 1 && !error) {
-              startLoad.call(this);
-            } else {
-              cb.call(this, image);
-            }
-          }.bind(this));
-        }.bind(this), 100);
-      }
-
-      function cb (image) {
-        var $image = $(image);
-        $image.css('visibility', 'visible');
-        $image.trigger('imageVisible');
-        // toggle the gallery
-        body.css('overflow', 'hidden');
-        root.addClass('clearing-blackout');
-        container.addClass('clearing-container');
-        visible_image.show();
-        this.fix_height(target)
-          .caption(self.S('.clearing-caption', visible_image), self.S('img', target))
-          .center_and_label(image, label)
-          .shift(current, target, function () {
-            target.closest('li').siblings().removeClass('visible');
-            target.closest('li').addClass('visible');
-          });
-        visible_image.trigger('opened.fndtn.clearing')
-      }
-
-      if (!this.locked()) {
-        visible_image.trigger('open.fndtn.clearing');
-        // set the image to the selected thumbnail
-        loaded = this.load($image);
-        if (loaded.interchange) {
-          image
-            .attr('data-interchange', loaded.interchange)
-            .foundation('interchange', 'reflow');
-        } else {
-          image
-            .attr('src', loaded.src)
-            .attr('data-interchange', '');
-        }
-        image.css('visibility', 'hidden');
-
-        startLoad.call(this);
-      }
-    },
-
-    close : function (e, el) {
-      e.preventDefault();
-
-      var root = (function (target) {
-            if (/blackout/.test(target.selector)) {
-              return target;
-            } else {
-              return target.closest('.clearing-blackout');
-            }
-          }($(el))),
-          body = $(document.body), container, visible_image;
-
-      if (el === e.target && root) {
-        body.css('overflow', '');
-        container = $('div', root).first();
-        visible_image = $('.visible-img', container);
-        visible_image.trigger('close.fndtn.clearing');
-        this.settings.prev_index = 0;
-        $('ul[' + this.attr_name() + ']', root)
-          .attr('style', '').closest('.clearing-blackout')
-          .removeClass('clearing-blackout');
-        container.removeClass('clearing-container');
-        visible_image.hide();
-        visible_image.trigger('closed.fndtn.clearing');
-      }
-
-      // Event to re-enable scrolling on touch devices
-      $('body').off('touchmove');
-
-      return false;
-    },
-
-    is_open : function (current) {
-      return current.parent().prop('style').length > 0;
-    },
-
-    keydown : function (e) {
-      var clearing = $('.clearing-blackout ul[' + this.attr_name() + ']'),
-          NEXT_KEY = this.rtl ? 37 : 39,
-          PREV_KEY = this.rtl ? 39 : 37,
-          ESC_KEY = 27;
-
-      if (e.which === NEXT_KEY) {
-        this.go(clearing, 'next');
-      }
-      if (e.which === PREV_KEY) {
-        this.go(clearing, 'prev');
-      }
-      if (e.which === ESC_KEY) {
-        this.S('a.clearing-close').trigger('click.fndtn.clearing');
-      }
-    },
-
-    nav : function (e, direction) {
-      var clearing = $('ul[' + this.attr_name() + ']', '.clearing-blackout');
-
-      e.preventDefault();
-      this.go(clearing, direction);
-    },
-
-    resize : function () {
-      var image = $('img', '.clearing-blackout .visible-img'),
-          label = $('.clearing-touch-label', '.clearing-blackout');
-
-      if (image.length) {
-        this.center_and_label(image, label);
-        image.trigger('resized.fndtn.clearing')
-      }
-    },
-
-    // visual adjustments
-    fix_height : function (target) {
-      var lis = target.parent().children(),
-          self = this;
-
-      lis.each(function () {
-        var li = self.S(this),
-            image = li.find('img');
-
-        if (li.height() > image.outerHeight()) {
-          li.addClass('fix-height');
-        }
-      })
-      .closest('ul')
-      .width(lis.length * 100 + '%');
-
-      return this;
-    },
-
-    update_paddles : function (target) {
-      target = target.closest('li');
-      var visible_image = target
-        .closest('.carousel')
-        .siblings('.visible-img');
-
-      if (target.next().length > 0) {
-        this.S('.clearing-main-next', visible_image).removeClass('disabled');
-      } else {
-        this.S('.clearing-main-next', visible_image).addClass('disabled');
-      }
-
-      if (target.prev().length > 0) {
-        this.S('.clearing-main-prev', visible_image).removeClass('disabled');
-      } else {
-        this.S('.clearing-main-prev', visible_image).addClass('disabled');
-      }
-    },
-
-    center_and_label : function (target, label) {
-      if (!this.rtl && label.length > 0) {
-        label.css({
-          marginLeft : -(label.outerWidth() / 2),
-          marginTop : -(target.outerHeight() / 2)-label.outerHeight()-10
-        });
-      } else {
-        label.css({
-          marginRight : -(label.outerWidth() / 2),
-          marginTop : -(target.outerHeight() / 2)-label.outerHeight()-10,
-          left: 'auto',
-          right: '50%'
-        });
-      }
-      return this;
-    },
-
-    // image loading and preloading
-
-    load : function ($image) {
-      var href,
-          interchange,
-          closest_a;
-
-      if ($image[0].nodeName === 'A') {
-        href = $image.attr('href');
-        interchange = $image.data('clearing-interchange');
-      } else {
-        closest_a = $image.closest('a');
-        href = closest_a.attr('href');
-        interchange = closest_a.data('clearing-interchange');
-      }
-
-      this.preload($image);
-
-      return {
-        'src': href ? href : $image.attr('src'),
-        'interchange': href ? interchange : $image.data('clearing-interchange')
-      }
-    },
-
-    preload : function ($image) {
-      this
-        .img($image.closest('li').next(), 'next')
-        .img($image.closest('li').prev(), 'prev');
-    },
-
-    img : function (img, sibling_type) {
-      if (img.length) {
-        var preload_img = $('.clearing-preload-' + sibling_type),
-            new_a = this.S('a', img),
-            src,
-            interchange,
-            image;
-
-        if (new_a.length) {
-          src = new_a.attr('href');
-          interchange = new_a.data('clearing-interchange');
-        } else {
-          image = this.S('img', img);
-          src = image.attr('src');
-          interchange = image.data('clearing-interchange');
-        }
-
-        if (interchange) {
-          preload_img.attr('data-interchange', interchange);
-        } else {
-          preload_img.attr('src', src);
-          preload_img.attr('data-interchange', '');
-        }
-      }
-      return this;
-    },
-
-    // image caption
-
-    caption : function (container, $image) {
-      var caption = $image.attr('data-caption');
-
-      if (caption) {
-        container
-          .html(caption)
-          .show();
-      } else {
-        container
-          .text('')
-          .hide();
-      }
-      return this;
-    },
-
-    // directional methods
-
-    go : function ($ul, direction) {
-      var current = this.S('.visible', $ul),
-          target = current[direction]();
-
-      // Check for skip selector.
-      if (this.settings.skip_selector && target.find(this.settings.skip_selector).length != 0) {
-        target = target[direction]();
-      }
-
-      if (target.length) {
-        this.S('img', target)
-          .trigger('click.fndtn.clearing', [current, target])
-          .trigger('change.fndtn.clearing');
-      }
-    },
-
-    shift : function (current, target, callback) {
-      var clearing = target.parent(),
-          old_index = this.settings.prev_index || target.index(),
-          direction = this.direction(clearing, current, target),
-          dir = this.rtl ? 'right' : 'left',
-          left = parseInt(clearing.css('left'), 10),
-          width = target.outerWidth(),
-          skip_shift;
-
-      var dir_obj = {};
-
-      // we use jQuery animate instead of CSS transitions because we
-      // need a callback to unlock the next animation
-      // needs support for RTL **
-      if (target.index() !== old_index && !/skip/.test(direction)) {
-        if (/left/.test(direction)) {
-          this.lock();
-          dir_obj[dir] = left + width;
-          clearing.animate(dir_obj, 300, this.unlock());
-        } else if (/right/.test(direction)) {
-          this.lock();
-          dir_obj[dir] = left - width;
-          clearing.animate(dir_obj, 300, this.unlock());
-        }
-      } else if (/skip/.test(direction)) {
-        // the target image is not adjacent to the current image, so
-        // do we scroll right or not
-        skip_shift = target.index() - this.settings.up_count;
-        this.lock();
-
-        if (skip_shift > 0) {
-          dir_obj[dir] = -(skip_shift * width);
-          clearing.animate(dir_obj, 300, this.unlock());
-        } else {
-          dir_obj[dir] = 0;
-          clearing.animate(dir_obj, 300, this.unlock());
-        }
-      }
-
-      callback();
-    },
-
-    direction : function ($el, current, target) {
-      var lis = this.S('li', $el),
-          li_width = lis.outerWidth() + (lis.outerWidth() / 4),
-          up_count = Math.floor(this.S('.clearing-container').outerWidth() / li_width) - 1,
-          target_index = lis.index(target),
-          response;
-
-      this.settings.up_count = up_count;
-
-      if (this.adjacent(this.settings.prev_index, target_index)) {
-        if ((target_index > up_count) && target_index > this.settings.prev_index) {
-          response = 'right';
-        } else if ((target_index > up_count - 1) && target_index <= this.settings.prev_index) {
-          response = 'left';
-        } else {
-          response = false;
-        }
-      } else {
-        response = 'skip';
-      }
-
-      this.settings.prev_index = target_index;
-
-      return response;
-    },
-
-    adjacent : function (current_index, target_index) {
-      for (var i = target_index + 1; i >= target_index - 1; i--) {
-        if (i === current_index) {
-          return true;
-        }
-      }
-      return false;
-    },
-
-    // lock management
-
-    lock : function () {
-      this.settings.locked = true;
-    },
-
-    unlock : function () {
-      this.settings.locked = false;
-    },
-
-    locked : function () {
-      return this.settings.locked;
-    },
-
-    off : function () {
-      this.S(this.scope).off('.fndtn.clearing');
-      this.S(window).off('.fndtn.clearing');
-    },
-
-    reflow : function () {
-      this.init();
-    }
-  };
-
-}(jQuery, window, window.document));
-;;(function ($, window, document, undefined) {
-  'use strict';
-
-  Foundation.libs.dropdown = {
-    name : 'dropdown',
-
-    version : '5.5.2',
-
-    settings : {
-      active_class : 'open',
-      disabled_class : 'disabled',
-      mega_class : 'mega',
-      align : 'bottom',
-      is_hover : false,
-      hover_timeout : 150,
-      opened : function () {},
-      closed : function () {}
-    },
-
-    init : function (scope, method, options) {
-      Foundation.inherit(this, 'throttle');
-
-      $.extend(true, this.settings, method, options);
-      this.bindings(method, options);
-    },
-
-    events : function (scope) {
-      var self = this,
-          S = self.S;
-
-      S(this.scope)
-        .off('.dropdown')
-        .on('click.fndtn.dropdown', '[' + this.attr_name() + ']', function (e) {
-          var settings = S(this).data(self.attr_name(true) + '-init') || self.settings;
-          if (!settings.is_hover || Modernizr.touch) {
-            e.preventDefault();
-            if (S(this).parent('[data-reveal-id]').length) {
-              e.stopPropagation();
-            }
-            self.toggle($(this));
-          }
-        })
-        .on('mouseenter.fndtn.dropdown', '[' + this.attr_name() + '], [' + this.attr_name() + '-content]', function (e) {
-          var $this = S(this),
-              dropdown,
-              target;
-
-          clearTimeout(self.timeout);
-
-          if ($this.data(self.data_attr())) {
-            dropdown = S('#' + $this.data(self.data_attr()));
-            target = $this;
-          } else {
-            dropdown = $this;
-            target = S('[' + self.attr_name() + '="' + dropdown.attr('id') + '"]');
-          }
-
-          var settings = target.data(self.attr_name(true) + '-init') || self.settings;
-
-          if (S(e.currentTarget).data(self.data_attr()) && settings.is_hover) {
-            self.closeall.call(self);
-          }
-
-          if (settings.is_hover) {
-            self.open.apply(self, [dropdown, target]);
-          }
-        })
-        .on('mouseleave.fndtn.dropdown', '[' + this.attr_name() + '], [' + this.attr_name() + '-content]', function (e) {
-          var $this = S(this);
-          var settings;
-
-          if ($this.data(self.data_attr())) {
-              settings = $this.data(self.data_attr(true) + '-init') || self.settings;
-          } else {
-              var target   = S('[' + self.attr_name() + '="' + S(this).attr('id') + '"]'),
-                  settings = target.data(self.attr_name(true) + '-init') || self.settings;
-          }
-
-          self.timeout = setTimeout(function () {
-            if ($this.data(self.data_attr())) {
-              if (settings.is_hover) {
-                self.close.call(self, S('#' + $this.data(self.data_attr())));
-              }
-            } else {
-              if (settings.is_hover) {
-                self.close.call(self, $this);
-              }
-            }
-          }.bind(this), settings.hover_timeout);
-        })
-        .on('click.fndtn.dropdown', function (e) {
-          var parent = S(e.target).closest('[' + self.attr_name() + '-content]');
-          var links  = parent.find('a');
-
-          if (links.length > 0 && parent.attr('aria-autoclose') !== 'false') {
-              self.close.call(self, S('[' + self.attr_name() + '-content]'));
-          }
-
-          if (e.target !== document && !$.contains(document.documentElement, e.target)) {
-            return;
-          }
-
-          if (S(e.target).closest('[' + self.attr_name() + ']').length > 0) {
-            return;
-          }
-
-          if (!(S(e.target).data('revealId')) &&
-            (parent.length > 0 && (S(e.target).is('[' + self.attr_name() + '-content]') ||
-              $.contains(parent.first()[0], e.target)))) {
-            e.stopPropagation();
-            return;
-          }
-
-          self.close.call(self, S('[' + self.attr_name() + '-content]'));
-        })
-        .on('opened.fndtn.dropdown', '[' + self.attr_name() + '-content]', function () {
-          self.settings.opened.call(this);
-        })
-        .on('closed.fndtn.dropdown', '[' + self.attr_name() + '-content]', function () {
-          self.settings.closed.call(this);
-        });
-
-      S(window)
-        .off('.dropdown')
-        .on('resize.fndtn.dropdown', self.throttle(function () {
-          self.resize.call(self);
-        }, 50));
-
-      this.resize();
-    },
-
-    close : function (dropdown) {
-      var self = this;
-      dropdown.each(function (idx) {
-        var original_target = $('[' + self.attr_name() + '=' + dropdown[idx].id + ']') || $('aria-controls=' + dropdown[idx].id + ']');
-        original_target.attr('aria-expanded', 'false');
-        if (self.S(this).hasClass(self.settings.active_class)) {
-          self.S(this)
-            .css(Foundation.rtl ? 'right' : 'left', '-99999px')
-            .attr('aria-hidden', 'true')
-            .removeClass(self.settings.active_class)
-            .prev('[' + self.attr_name() + ']')
-            .removeClass(self.settings.active_class)
-            .removeData('target');
-
-          self.S(this).trigger('closed.fndtn.dropdown', [dropdown]);
-        }
-      });
-      dropdown.removeClass('f-open-' + this.attr_name(true));
-    },
-
-    closeall : function () {
-      var self = this;
-      $.each(self.S('.f-open-' + this.attr_name(true)), function () {
-        self.close.call(self, self.S(this));
-      });
-    },
-
-    open : function (dropdown, target) {
-      this
-        .css(dropdown
-        .addClass(this.settings.active_class), target);
-      dropdown.prev('[' + this.attr_name() + ']').addClass(this.settings.active_class);
-      dropdown.data('target', target.get(0)).trigger('opened.fndtn.dropdown', [dropdown, target]);
-      dropdown.attr('aria-hidden', 'false');
-      target.attr('aria-expanded', 'true');
-      dropdown.focus();
-      dropdown.addClass('f-open-' + this.attr_name(true));
-    },
-
-    data_attr : function () {
-      if (this.namespace.length > 0) {
-        return this.namespace + '-' + this.name;
-      }
-
-      return this.name;
-    },
-
-    toggle : function (target) {
-      if (target.hasClass(this.settings.disabled_class)) {
-        return;
-      }
-      var dropdown = this.S('#' + target.data(this.data_attr()));
-      if (dropdown.length === 0) {
-        // No dropdown found, not continuing
-        return;
-      }
-
-      this.close.call(this, this.S('[' + this.attr_name() + '-content]').not(dropdown));
-
-      if (dropdown.hasClass(this.settings.active_class)) {
-        this.close.call(this, dropdown);
-        if (dropdown.data('target') !== target.get(0)) {
-          this.open.call(this, dropdown, target);
-        }
-      } else {
-        this.open.call(this, dropdown, target);
-      }
-    },
-
-    resize : function () {
-      var dropdown = this.S('[' + this.attr_name() + '-content].open');
-      var target = $(dropdown.data("target"));
-
-      if (dropdown.length && target.length) {
-        this.css(dropdown, target);
-      }
-    },
-
-    css : function (dropdown, target) {
-      var left_offset = Math.max((target.width() - dropdown.width()) / 2, 8),
-          settings = target.data(this.attr_name(true) + '-init') || this.settings,
-          parentOverflow = dropdown.parent().css('overflow-y') || dropdown.parent().css('overflow');
-
-      this.clear_idx();
-
-
-
-      if (this.small()) {
-        var p = this.dirs.bottom.call(dropdown, target, settings);
-
-        dropdown.attr('style', '').removeClass('drop-left drop-right drop-top').css({
-          position : 'absolute',
-          width : '95%',
-          'max-width' : 'none',
-          top : p.top
-        });
-
-        dropdown.css(Foundation.rtl ? 'right' : 'left', left_offset);
-      }
-      // detect if dropdown is in an overflow container
-      else if (parentOverflow !== 'visible') {
-        var offset = target[0].offsetTop + target[0].offsetHeight;
-
-        dropdown.attr('style', '').css({
-          position : 'absolute',
-          top : offset
-        });
-
-        dropdown.css(Foundation.rtl ? 'right' : 'left', left_offset);
-      }
-      else {
-
-        this.style(dropdown, target, settings);
-      }
-
-      return dropdown;
-    },
-
-    style : function (dropdown, target, settings) {
-      var css = $.extend({position : 'absolute'},
-        this.dirs[settings.align].call(dropdown, target, settings));
-
-      dropdown.attr('style', '').css(css);
-    },
-
-    // return CSS property object
-    // `this` is the dropdown
-    dirs : {
-      // Calculate target offset
-      _base : function (t) {
-        var o_p = this.offsetParent(),
-            o = o_p.offset(),
-            p = t.offset();
-
-        p.top -= o.top;
-        p.left -= o.left;
-
-        //set some flags on the p object to pass along
-        p.missRight = false;
-        p.missTop = false;
-        p.missLeft = false;
-        p.leftRightFlag = false;
-
-        //lets see if the panel will be off the screen
-        //get the actual width of the page and store it
-        var actualBodyWidth;
-        if (document.getElementsByClassName('row')[0]) {
-          actualBodyWidth = document.getElementsByClassName('row')[0].clientWidth;
-        } else {
-          actualBodyWidth = window.innerWidth;
-        }
-
-        var actualMarginWidth = (window.innerWidth - actualBodyWidth) / 2;
-        var actualBoundary = actualBodyWidth;
-
-        if (!this.hasClass('mega')) {
-          //miss top
-          if (t.offset().top <= this.outerHeight()) {
-            p.missTop = true;
-            actualBoundary = window.innerWidth - actualMarginWidth;
-            p.leftRightFlag = true;
-          }
-
-          //miss right
-          if (t.offset().left + this.outerWidth() > t.offset().left + actualMarginWidth && t.offset().left - actualMarginWidth > this.outerWidth()) {
-            p.missRight = true;
-            p.missLeft = false;
-          }
-
-          //miss left
-          if (t.offset().left - this.outerWidth() <= 0) {
-            p.missLeft = true;
-            p.missRight = false;
-          }
-        }
-
-        return p;
-      },
-
-      top : function (t, s) {
-        var self = Foundation.libs.dropdown,
-            p = self.dirs._base.call(this, t);
-
-        this.addClass('drop-top');
-
-        if (p.missTop == true) {
-          p.top = p.top + t.outerHeight() + this.outerHeight();
-          this.removeClass('drop-top');
-        }
-
-        if (p.missRight == true) {
-          p.left = p.left - this.outerWidth() + t.outerWidth();
-        }
-
-        if (t.outerWidth() < this.outerWidth() || self.small() || this.hasClass(s.mega_menu)) {
-          self.adjust_pip(this, t, s, p);
-        }
-
-        if (Foundation.rtl) {
-          return {left : p.left - this.outerWidth() + t.outerWidth(),
-            top : p.top - this.outerHeight()};
-        }
-
-        return {left : p.left, top : p.top - this.outerHeight()};
-      },
-
-      bottom : function (t, s) {
-        var self = Foundation.libs.dropdown,
-            p = self.dirs._base.call(this, t);
-
-        if (p.missRight == true) {
-          p.left = p.left - this.outerWidth() + t.outerWidth();
-        }
-
-        if (t.outerWidth() < this.outerWidth() || self.small() || this.hasClass(s.mega_menu)) {
-          self.adjust_pip(this, t, s, p);
-        }
-
-        if (self.rtl) {
-          return {left : p.left - this.outerWidth() + t.outerWidth(), top : p.top + t.outerHeight()};
-        }
-
-        return {left : p.left, top : p.top + t.outerHeight()};
-      },
-
-      left : function (t, s) {
-        var p = Foundation.libs.dropdown.dirs._base.call(this, t);
-
-        this.addClass('drop-left');
-
-        if (p.missLeft == true) {
-          p.left =  p.left + this.outerWidth();
-          p.top = p.top + t.outerHeight();
-          this.removeClass('drop-left');
-        }
-
-        return {left : p.left - this.outerWidth(), top : p.top};
-      },
-
-      right : function (t, s) {
-        var p = Foundation.libs.dropdown.dirs._base.call(this, t);
-
-        this.addClass('drop-right');
-
-        if (p.missRight == true) {
-          p.left = p.left - this.outerWidth();
-          p.top = p.top + t.outerHeight();
-          this.removeClass('drop-right');
-        } else {
-          p.triggeredRight = true;
-        }
-
-        var self = Foundation.libs.dropdown;
-
-        if (t.outerWidth() < this.outerWidth() || self.small() || this.hasClass(s.mega_menu)) {
-          self.adjust_pip(this, t, s, p);
-        }
-
-        return {left : p.left + t.outerWidth(), top : p.top};
-      }
-    },
-
-    // Insert rule to style psuedo elements
-    adjust_pip : function (dropdown, target, settings, position) {
-      var sheet = Foundation.stylesheet,
-          pip_offset_base = 8;
-
-      if (dropdown.hasClass(settings.mega_class)) {
-        pip_offset_base = position.left + (target.outerWidth() / 2) - 8;
-      } else if (this.small()) {
-        pip_offset_base += position.left - 8;
-      }
-
-      this.rule_idx = sheet.cssRules.length;
-
-      //default
-      var sel_before = '.f-dropdown.open:before',
-          sel_after  = '.f-dropdown.open:after',
-          css_before = 'left: ' + pip_offset_base + 'px;',
-          css_after  = 'left: ' + (pip_offset_base - 1) + 'px;';
-
-      if (position.missRight == true) {
-        pip_offset_base = dropdown.outerWidth() - 23;
-        sel_before = '.f-dropdown.open:before',
-        sel_after  = '.f-dropdown.open:after',
-        css_before = 'left: ' + pip_offset_base + 'px;',
-        css_after  = 'left: ' + (pip_offset_base - 1) + 'px;';
-      }
-
-      //just a case where right is fired, but its not missing right
-      if (position.triggeredRight == true) {
-        sel_before = '.f-dropdown.open:before',
-        sel_after  = '.f-dropdown.open:after',
-        css_before = 'left:-12px;',
-        css_after  = 'left:-14px;';
-      }
-
-      if (sheet.insertRule) {
-        sheet.insertRule([sel_before, '{', css_before, '}'].join(' '), this.rule_idx);
-        sheet.insertRule([sel_after, '{', css_after, '}'].join(' '), this.rule_idx + 1);
-      } else {
-        sheet.addRule(sel_before, css_before, this.rule_idx);
-        sheet.addRule(sel_after, css_after, this.rule_idx + 1);
-      }
-    },
-
-    // Remove old dropdown rule index
-    clear_idx : function () {
-      var sheet = Foundation.stylesheet;
-
-      if (typeof this.rule_idx !== 'undefined') {
-        sheet.deleteRule(this.rule_idx);
-        sheet.deleteRule(this.rule_idx);
-        delete this.rule_idx;
-      }
-    },
-
-    small : function () {
-      return matchMedia(Foundation.media_queries.small).matches &&
-        !matchMedia(Foundation.media_queries.medium).matches;
-    },
-
-    off : function () {
-      this.S(this.scope).off('.fndtn.dropdown');
-      this.S('html, body').off('.fndtn.dropdown');
-      this.S(window).off('.fndtn.dropdown');
-      this.S('[data-dropdown-content]').off('.fndtn.dropdown');
-    },
-
-    reflow : function () {}
-  };
-}(jQuery, window, window.document));
-;;(function ($, window, document, undefined) {
-  'use strict';
-
-  Foundation.libs.equalizer = {
-    name : 'equalizer',
-
-    version : '5.5.2',
-
-    settings : {
-      use_tallest : true,
-      before_height_change : $.noop,
-      after_height_change : $.noop,
-      equalize_on_stack : false,
-      act_on_hidden_el: false
-    },
-
-    init : function (scope, method, options) {
-      Foundation.inherit(this, 'image_loaded');
-      this.bindings(method, options);
-      this.reflow();
-    },
-
-    events : function () {
-      this.S(window).off('.equalizer').on('resize.fndtn.equalizer', function (e) {
-        this.reflow();
-      }.bind(this));
-    },
-
-    equalize : function (equalizer) {
-      var isStacked = false,
-          group = equalizer.data('equalizer'),
-          settings = equalizer.data(this.attr_name(true)+'-init') || this.settings,
-          vals,
-          firstTopOffset;
-
-      if (settings.act_on_hidden_el) {
-        vals = group ? equalizer.find('['+this.attr_name()+'-watch="'+group+'"]') : equalizer.find('['+this.attr_name()+'-watch]');
-      }
-      else {
-        vals = group ? equalizer.find('['+this.attr_name()+'-watch="'+group+'"]:visible') : equalizer.find('['+this.attr_name()+'-watch]:visible');
-      }
-      
-      if (vals.length === 0) {
-        return;
-      }
-
-      settings.before_height_change();
-      equalizer.trigger('before-height-change.fndth.equalizer');
-      vals.height('inherit');
-
-      if (settings.equalize_on_stack === false) {
-        firstTopOffset = vals.first().offset().top;
-        vals.each(function () {
-          if ($(this).offset().top !== firstTopOffset) {
-            isStacked = true;
-            return false;
-          }
-        });
-        if (isStacked) {
-          return;
-        }
-      }
-
-      var heights = vals.map(function () { return $(this).outerHeight(false) }).get();
-
-      if (settings.use_tallest) {
-        var max = Math.max.apply(null, heights);
-        vals.css('height', max);
-      } else {
-        var min = Math.min.apply(null, heights);
-        vals.css('height', min);
-      }
-
-      settings.after_height_change();
-      equalizer.trigger('after-height-change.fndtn.equalizer');
-    },
-
-    reflow : function () {
-      var self = this;
-
-      this.S('[' + this.attr_name() + ']', this.scope).each(function () {
-        var $eq_target = $(this),
-            media_query = $eq_target.data('equalizer-mq'),
-            ignore_media_query = true;
-
-        if (media_query) {
-          media_query = 'is_' + media_query.replace(/-/g, '_');
-          if (Foundation.utils.hasOwnProperty(media_query)) {
-            ignore_media_query = false;
-          }
-        }
-
-        self.image_loaded(self.S('img', this), function () {
-          if (ignore_media_query || Foundation.utils[media_query]()) {
-            self.equalize($eq_target)
-          } else {
-            var vals = $eq_target.find('[' + self.attr_name() + '-watch]:visible');
-            vals.css('height', 'auto');
-          }
-        });
-      });
-    }
-  };
-})(jQuery, window, window.document);
-;;(function ($, window, document, undefined) {
-  'use strict';
-
-  Foundation.libs.interchange = {
-    name : 'interchange',
-
-    version : '5.5.2',
-
-    cache : {},
-
-    images_loaded : false,
-    nodes_loaded : false,
-
-    settings : {
-      load_attr : 'interchange',
-
-      named_queries : {
-        'default'     : 'only screen',
-        'small'       : Foundation.media_queries['small'],
-        'small-only'  : Foundation.media_queries['small-only'],
-        'medium'      : Foundation.media_queries['medium'],
-        'medium-only' : Foundation.media_queries['medium-only'],
-        'large'       : Foundation.media_queries['large'],
-        'large-only'  : Foundation.media_queries['large-only'],
-        'xlarge'      : Foundation.media_queries['xlarge'],
-        'xlarge-only' : Foundation.media_queries['xlarge-only'],
-        'xxlarge'     : Foundation.media_queries['xxlarge'],
-        'landscape'   : 'only screen and (orientation: landscape)',
-        'portrait'    : 'only screen and (orientation: portrait)',
-        'retina'      : 'only screen and (-webkit-min-device-pixel-ratio: 2),' +
-          'only screen and (min--moz-device-pixel-ratio: 2),' +
-          'only screen and (-o-min-device-pixel-ratio: 2/1),' +
-          'only screen and (min-device-pixel-ratio: 2),' +
-          'only screen and (min-resolution: 192dpi),' +
-          'only screen and (min-resolution: 2dppx)'
-      },
-
-      directives : {
-        replace : function (el, path, trigger) {
-          // The trigger argument, if called within the directive, fires
-          // an event named after the directive on the element, passing
-          // any parameters along to the event that you pass to trigger.
-          //
-          // ex. trigger(), trigger([a, b, c]), or trigger(a, b, c)
-          //
-          // This allows you to bind a callback like so:
-          // $('#interchangeContainer').on('replace', function (e, a, b, c) {
-          //   console.log($(this).html(), a, b, c);
-          // });
-
-          if (el !== null && /IMG/.test(el[0].nodeName)) {
-            var orig_path = el[0].src;
-
-            if (new RegExp(path, 'i').test(orig_path)) {
-              return;
-            }
-
-            el.attr("src", path);
-
-            return trigger(el[0].src);
-          }
-          var last_path = el.data(this.data_attr + '-last-path'),
-              self = this;
-
-          if (last_path == path) {
-            return;
-          }
-
-          if (/\.(gif|jpg|jpeg|tiff|png)([?#].*)?/i.test(path)) {
-            $(el).css('background-image', 'url(' + path + ')');
-            el.data('interchange-last-path', path);
-            return trigger(path);
-          }
-
-          return $.get(path, function (response) {
-            el.html(response);
-            el.data(self.data_attr + '-last-path', path);
-            trigger();
-          });
-
-        }
-      }
-    },
-
-    init : function (scope, method, options) {
-      Foundation.inherit(this, 'throttle random_str');
-
-      this.data_attr = this.set_data_attr();
-      $.extend(true, this.settings, method, options);
-      this.bindings(method, options);
-      this.reflow();
-    },
-
-    get_media_hash : function () {
-        var mediaHash = '';
-        for (var queryName in this.settings.named_queries ) {
-            mediaHash += matchMedia(this.settings.named_queries[queryName]).matches.toString();
-        }
-        return mediaHash;
-    },
-
-    events : function () {
-      var self = this, prevMediaHash;
-
-      $(window)
-        .off('.interchange')
-        .on('resize.fndtn.interchange', self.throttle(function () {
-            var currMediaHash = self.get_media_hash();
-            if (currMediaHash !== prevMediaHash) {
-                self.resize();
-            }
-            prevMediaHash = currMediaHash;
-        }, 50));
-
-      return this;
-    },
-
-    resize : function () {
-      var cache = this.cache;
-
-      if (!this.images_loaded || !this.nodes_loaded) {
-        setTimeout($.proxy(this.resize, this), 50);
-        return;
-      }
-
-      for (var uuid in cache) {
-        if (cache.hasOwnProperty(uuid)) {
-          var passed = this.results(uuid, cache[uuid]);
-          if (passed) {
-            this.settings.directives[passed
-              .scenario[1]].call(this, passed.el, passed.scenario[0], (function (passed) {
-                if (arguments[0] instanceof Array) {
-                  var args = arguments[0];
-                } else {
-                  var args = Array.prototype.slice.call(arguments, 0);
-                }
-
-                return function() {
-                  passed.el.trigger(passed.scenario[1], args);
-                }
-              }(passed)));
-          }
-        }
-      }
-
-    },
-
-    results : function (uuid, scenarios) {
-      var count = scenarios.length;
-
-      if (count > 0) {
-        var el = this.S('[' + this.add_namespace('data-uuid') + '="' + uuid + '"]');
-
-        while (count--) {
-          var mq, rule = scenarios[count][2];
-          if (this.settings.named_queries.hasOwnProperty(rule)) {
-            mq = matchMedia(this.settings.named_queries[rule]);
-          } else {
-            mq = matchMedia(rule);
-          }
-          if (mq.matches) {
-            return {el : el, scenario : scenarios[count]};
-          }
-        }
-      }
-
-      return false;
-    },
-
-    load : function (type, force_update) {
-      if (typeof this['cached_' + type] === 'undefined' || force_update) {
-        this['update_' + type]();
-      }
-
-      return this['cached_' + type];
-    },
-
-    update_images : function () {
-      var images = this.S('img[' + this.data_attr + ']'),
-          count = images.length,
-          i = count,
-          loaded_count = 0,
-          data_attr = this.data_attr;
-
-      this.cache = {};
-      this.cached_images = [];
-      this.images_loaded = (count === 0);
-
-      while (i--) {
-        loaded_count++;
-        if (images[i]) {
-          var str = images[i].getAttribute(data_attr) || '';
-
-          if (str.length > 0) {
-            this.cached_images.push(images[i]);
-          }
-        }
-
-        if (loaded_count === count) {
-          this.images_loaded = true;
-          this.enhance('images');
-        }
-      }
-
-      return this;
-    },
-
-    update_nodes : function () {
-      var nodes = this.S('[' + this.data_attr + ']').not('img'),
-          count = nodes.length,
-          i = count,
-          loaded_count = 0,
-          data_attr = this.data_attr;
-
-      this.cached_nodes = [];
-      this.nodes_loaded = (count === 0);
-
-      while (i--) {
-        loaded_count++;
-        var str = nodes[i].getAttribute(data_attr) || '';
-
-        if (str.length > 0) {
-          this.cached_nodes.push(nodes[i]);
-        }
-
-        if (loaded_count === count) {
-          this.nodes_loaded = true;
-          this.enhance('nodes');
-        }
-      }
-
-      return this;
-    },
-
-    enhance : function (type) {
-      var i = this['cached_' + type].length;
-
-      while (i--) {
-        this.object($(this['cached_' + type][i]));
-      }
-
-      return $(window).trigger('resize.fndtn.interchange');
-    },
-
-    convert_directive : function (directive) {
-
-      var trimmed = this.trim(directive);
-
-      if (trimmed.length > 0) {
-        return trimmed;
-      }
-
-      return 'replace';
-    },
-
-    parse_scenario : function (scenario) {
-      // This logic had to be made more complex since some users were using commas in the url path
-      // So we cannot simply just split on a comma
-
-      var directive_match = scenario[0].match(/(.+),\s*(\w+)\s*$/),
-      // getting the mq has gotten a bit complicated since we started accounting for several use cases
-      // of URLs. For now we'll continue to match these scenarios, but we may consider having these scenarios
-      // as nested objects or arrays in F6.
-      // regex: match everything before close parenthesis for mq
-      media_query         = scenario[1].match(/(.*)\)/);
-
-      if (directive_match) {
-        var path  = directive_match[1],
-        directive = directive_match[2];
-
-      } else {
-        var cached_split = scenario[0].split(/,\s*$/),
-        path             = cached_split[0],
-        directive        = '';
-      }
-
-      return [this.trim(path), this.convert_directive(directive), this.trim(media_query[1])];
-    },
-
-    object : function (el) {
-      var raw_arr = this.parse_data_attr(el),
-          scenarios = [],
-          i = raw_arr.length;
-
-      if (i > 0) {
-        while (i--) {
-          // split array between comma delimited content and mq
-          // regex: comma, optional space, open parenthesis
-          var scenario = raw_arr[i].split(/,\s?\(/);
-
-          if (scenario.length > 1) {
-            var params = this.parse_scenario(scenario);
-            scenarios.push(params);
-          }
-        }
-      }
-
-      return this.store(el, scenarios);
-    },
-
-    store : function (el, scenarios) {
-      var uuid = this.random_str(),
-          current_uuid = el.data(this.add_namespace('uuid', true));
-
-      if (this.cache[current_uuid]) {
-        return this.cache[current_uuid];
-      }
-
-      el.attr(this.add_namespace('data-uuid'), uuid);
-      return this.cache[uuid] = scenarios;
-    },
-
-    trim : function (str) {
-
-      if (typeof str === 'string') {
-        return $.trim(str);
-      }
-
-      return str;
-    },
-
-    set_data_attr : function (init) {
-      if (init) {
-        if (this.namespace.length > 0) {
-          return this.namespace + '-' + this.settings.load_attr;
-        }
-
-        return this.settings.load_attr;
-      }
-
-      if (this.namespace.length > 0) {
-        return 'data-' + this.namespace + '-' + this.settings.load_attr;
-      }
-
-      return 'data-' + this.settings.load_attr;
-    },
-
-    parse_data_attr : function (el) {
-      var raw = el.attr(this.attr_name()).split(/\[(.*?)\]/),
-          i = raw.length,
-          output = [];
-
-      while (i--) {
-        if (raw[i].replace(/[\W\d]+/, '').length > 4) {
-          output.push(raw[i]);
-        }
-      }
-
-      return output;
-    },
-
-    reflow : function () {
-      this.load('images', true);
-      this.load('nodes', true);
+    if (config.constructor.prototype
+        .hasOwnProperty(componentConfigProperty_)) {
+      throw new Error(
+        'component classes must not have ' + componentConfigProperty_ +
+          ' defined as a property.');
     }
 
-  };
+    var found = findRegisteredClass_(config.classAsString, newConfig);
 
-}(jQuery, window, window.document));
-;;(function ($, window, document, undefined) {
-  'use strict';
-
-  var Modernizr = Modernizr || false;
-
-  Foundation.libs.joyride = {
-    name : 'joyride',
-
-    version : '5.5.2',
-
-    defaults : {
-      expose                   : false,     // turn on or off the expose feature
-      modal                    : true,      // Whether to cover page with modal during the tour
-      keyboard                 : true,      // enable left, right and esc keystrokes
-      tip_location             : 'bottom',  // 'top' or 'bottom' in relation to parent
-      nub_position             : 'auto',    // override on a per tooltip bases
-      scroll_speed             : 1500,      // Page scrolling speed in milliseconds, 0 = no scroll animation
-      scroll_animation         : 'linear',  // supports 'swing' and 'linear', extend with jQuery UI.
-      timer                    : 0,         // 0 = no timer , all other numbers = timer in milliseconds
-      start_timer_on_click     : true,      // true or false - true requires clicking the first button start the timer
-      start_offset             : 0,         // the index of the tooltip you want to start on (index of the li)
-      next_button              : true,      // true or false to control whether a next button is used
-      prev_button              : true,      // true or false to control whether a prev button is used
-      tip_animation            : 'fade',    // 'pop' or 'fade' in each tip
-      pause_after              : [],        // array of indexes where to pause the tour after
-      exposed                  : [],        // array of expose elements
-      tip_animation_fade_speed : 300,       // when tipAnimation = 'fade' this is speed in milliseconds for the transition
-      cookie_monster           : false,     // true or false to control whether cookies are used
-      cookie_name              : 'joyride', // Name the cookie you'll use
-      cookie_domain            : false,     // Will this cookie be attached to a domain, ie. '.notableapp.com'
-      cookie_expires           : 365,       // set when you would like the cookie to expire.
-      tip_container            : 'body',    // Where will the tip be attached
-      abort_on_close           : true,      // When true, the close event will not fire any callback
-      tip_location_patterns    : {
-        top : ['bottom'],
-        bottom : [], // bottom should not need to be repositioned
-        left : ['right', 'top', 'bottom'],
-        right : ['left', 'top', 'bottom']
-      },
-      post_ride_callback     : function () {},    // A method to call once the tour closes (canceled or complete)
-      post_step_callback     : function () {},    // A method to call after each step
-      pre_step_callback      : function () {},    // A method to call before each step
-      pre_ride_callback      : function () {},    // A method to call before the tour starts (passed index, tip, and cloned exposed element)
-      post_expose_callback   : function () {},    // A method to call after an element has been exposed
-      template : { // HTML segments for tip layout
-        link          : '<a href="#close" class="joyride-close-tip">&times;</a>',
-        timer         : '<div class="joyride-timer-indicator-wrap"><span class="joyride-timer-indicator"></span></div>',
-        tip           : '<div class="joyride-tip-guide"><span class="joyride-nub"></span></div>',
-        wrapper       : '<div class="joyride-content-wrapper"></div>',
-        button        : '<a href="#" class="small button joyride-next-tip"></a>',
-        prev_button   : '<a href="#" class="small button joyride-prev-tip"></a>',
-        modal         : '<div class="joyride-modal-bg"></div>',
-        expose        : '<div class="joyride-expose-wrapper"></div>',
-        expose_cover  : '<div class="joyride-expose-cover"></div>'
-      },
-      expose_add_class : '' // One or more space-separated class names to be added to exposed element
-    },
-
-    init : function (scope, method, options) {
-      Foundation.inherit(this, 'throttle random_str');
-
-      this.settings = this.settings || $.extend({}, this.defaults, (options || method));
-
-      this.bindings(method, options)
-    },
-
-    go_next : function () {
-      if (this.settings.$li.next().length < 1) {
-        this.end();
-      } else if (this.settings.timer > 0) {
-        clearTimeout(this.settings.automate);
-        this.hide();
-        this.show();
-        this.startTimer();
-      } else {
-        this.hide();
-        this.show();
-      }
-    },
-
-    go_prev : function () {
-      if (this.settings.$li.prev().length < 1) {
-        // Do nothing if there are no prev element
-      } else if (this.settings.timer > 0) {
-        clearTimeout(this.settings.automate);
-        this.hide();
-        this.show(null, true);
-        this.startTimer();
-      } else {
-        this.hide();
-        this.show(null, true);
-      }
-    },
-
-    events : function () {
-      var self = this;
-
-      $(this.scope)
-        .off('.joyride')
-        .on('click.fndtn.joyride', '.joyride-next-tip, .joyride-modal-bg', function (e) {
-          e.preventDefault();
-          this.go_next()
-        }.bind(this))
-        .on('click.fndtn.joyride', '.joyride-prev-tip', function (e) {
-          e.preventDefault();
-          this.go_prev();
-        }.bind(this))
-
-        .on('click.fndtn.joyride', '.joyride-close-tip', function (e) {
-          e.preventDefault();
-          this.end(this.settings.abort_on_close);
-        }.bind(this))
-
-        .on('keyup.fndtn.joyride', function (e) {
-          // Don't do anything if keystrokes are disabled
-          // or if the joyride is not being shown
-          if (!this.settings.keyboard || !this.settings.riding) {
-            return;
-          }
-
-          switch (e.which) {
-            case 39: // right arrow
-              e.preventDefault();
-              this.go_next();
-              break;
-            case 37: // left arrow
-              e.preventDefault();
-              this.go_prev();
-              break;
-            case 27: // escape
-              e.preventDefault();
-              this.end(this.settings.abort_on_close);
-          }
-        }.bind(this));
-
-      $(window)
-        .off('.joyride')
-        .on('resize.fndtn.joyride', self.throttle(function () {
-          if ($('[' + self.attr_name() + ']').length > 0 && self.settings.$next_tip && self.settings.riding) {
-            if (self.settings.exposed.length > 0) {
-              var $els = $(self.settings.exposed);
-
-              $els.each(function () {
-                var $this = $(this);
-                self.un_expose($this);
-                self.expose($this);
-              });
-            }
-
-            if (self.is_phone()) {
-              self.pos_phone();
-            } else {
-              self.pos_default(false);
-            }
-          }
-        }, 100));
-    },
-
-    start : function () {
-      var self = this,
-          $this = $('[' + this.attr_name() + ']', this.scope),
-          integer_settings = ['timer', 'scrollSpeed', 'startOffset', 'tipAnimationFadeSpeed', 'cookieExpires'],
-          int_settings_count = integer_settings.length;
-
-      if (!$this.length > 0) {
-        return;
-      }
-
-      if (!this.settings.init) {
-        this.events();
-      }
-
-      this.settings = $this.data(this.attr_name(true) + '-init');
-
-      // non configureable settings
-      this.settings.$content_el = $this;
-      this.settings.$body = $(this.settings.tip_container);
-      this.settings.body_offset = $(this.settings.tip_container).position();
-      this.settings.$tip_content = this.settings.$content_el.find('> li');
-      this.settings.paused = false;
-      this.settings.attempts = 0;
-      this.settings.riding = true;
-
-      // can we create cookies?
-      if (typeof $.cookie !== 'function') {
-        this.settings.cookie_monster = false;
-      }
-
-      // generate the tips and insert into dom.
-      if (!this.settings.cookie_monster || this.settings.cookie_monster && !$.cookie(this.settings.cookie_name)) {
-        this.settings.$tip_content.each(function (index) {
-          var $this = $(this);
-          this.settings = $.extend({}, self.defaults, self.data_options($this));
-
-          // Make sure that settings parsed from data_options are integers where necessary
-          var i = int_settings_count;
-          while (i--) {
-            self.settings[integer_settings[i]] = parseInt(self.settings[integer_settings[i]], 10);
-          }
-          self.create({$li : $this, index : index});
-        });
-
-        // show first tip
-        if (!this.settings.start_timer_on_click && this.settings.timer > 0) {
-          this.show('init');
-          this.startTimer();
-        } else {
-          this.show('init');
-        }
-
-      }
-    },
-
-    resume : function () {
-      this.set_li();
-      this.show();
-    },
-
-    tip_template : function (opts) {
-      var $blank, content;
-
-      opts.tip_class = opts.tip_class || '';
-
-      $blank = $(this.settings.template.tip).addClass(opts.tip_class);
-      content = $.trim($(opts.li).html()) +
-        this.prev_button_text(opts.prev_button_text, opts.index) +
-        this.button_text(opts.button_text) +
-        this.settings.template.link +
-        this.timer_instance(opts.index);
-
-      $blank.append($(this.settings.template.wrapper));
-      $blank.first().attr(this.add_namespace('data-index'), opts.index);
-      $('.joyride-content-wrapper', $blank).append(content);
-
-      return $blank[0];
-    },
-
-    timer_instance : function (index) {
-      var txt;
-
-      if ((index === 0 && this.settings.start_timer_on_click && this.settings.timer > 0) || this.settings.timer === 0) {
-        txt = '';
-      } else {
-        txt = $(this.settings.template.timer)[0].outerHTML;
-      }
-      return txt;
-    },
-
-    button_text : function (txt) {
-      if (this.settings.tip_settings.next_button) {
-        txt = $.trim(txt) || 'Next';
-        txt = $(this.settings.template.button).append(txt)[0].outerHTML;
-      } else {
-        txt = '';
-      }
-      return txt;
-    },
-
-    prev_button_text : function (txt, idx) {
-      if (this.settings.tip_settings.prev_button) {
-        txt = $.trim(txt) || 'Previous';
-
-        // Add the disabled class to the button if it's the first element
-        if (idx == 0) {
-          txt = $(this.settings.template.prev_button).append(txt).addClass('disabled')[0].outerHTML;
-        } else {
-          txt = $(this.settings.template.prev_button).append(txt)[0].outerHTML;
-        }
-      } else {
-        txt = '';
-      }
-      return txt;
-    },
-
-    create : function (opts) {
-      this.settings.tip_settings = $.extend({}, this.settings, this.data_options(opts.$li));
-      var buttonText = opts.$li.attr(this.add_namespace('data-button')) || opts.$li.attr(this.add_namespace('data-text')),
-          prevButtonText = opts.$li.attr(this.add_namespace('data-button-prev')) || opts.$li.attr(this.add_namespace('data-prev-text')),
-        tipClass = opts.$li.attr('class'),
-        $tip_content = $(this.tip_template({
-          tip_class : tipClass,
-          index : opts.index,
-          button_text : buttonText,
-          prev_button_text : prevButtonText,
-          li : opts.$li
-        }));
-
-      $(this.settings.tip_container).append($tip_content);
-    },
-
-    show : function (init, is_prev) {
-      var $timer = null;
-
-      // are we paused?
-      if (this.settings.$li === undefined || ($.inArray(this.settings.$li.index(), this.settings.pause_after) === -1)) {
-
-        // don't go to the next li if the tour was paused
-        if (this.settings.paused) {
-          this.settings.paused = false;
-        } else {
-          this.set_li(init, is_prev);
-        }
-
-        this.settings.attempts = 0;
-
-        if (this.settings.$li.length && this.settings.$target.length > 0) {
-          if (init) { //run when we first start
-            this.settings.pre_ride_callback(this.settings.$li.index(), this.settings.$next_tip);
-            if (this.settings.modal) {
-              this.show_modal();
-            }
-          }
-
-          this.settings.pre_step_callback(this.settings.$li.index(), this.settings.$next_tip);
-
-          if (this.settings.modal && this.settings.expose) {
-            this.expose();
-          }
-
-          this.settings.tip_settings = $.extend({}, this.settings, this.data_options(this.settings.$li));
-
-          this.settings.timer = parseInt(this.settings.timer, 10);
-
-          this.settings.tip_settings.tip_location_pattern = this.settings.tip_location_patterns[this.settings.tip_settings.tip_location];
-
-          // scroll and hide bg if not modal
-          if (!/body/i.test(this.settings.$target.selector)) {
-            var joyridemodalbg = $('.joyride-modal-bg');
-            if (/pop/i.test(this.settings.tipAnimation)) {
-                joyridemodalbg.hide();
-            } else {
-                joyridemodalbg.fadeOut(this.settings.tipAnimationFadeSpeed);
-            }
-            this.scroll_to();
-          }
-
-          if (this.is_phone()) {
-            this.pos_phone(true);
-          } else {
-            this.pos_default(true);
-          }
-
-          $timer = this.settings.$next_tip.find('.joyride-timer-indicator');
-
-          if (/pop/i.test(this.settings.tip_animation)) {
-
-            $timer.width(0);
-
-            if (this.settings.timer > 0) {
-
-              this.settings.$next_tip.show();
-
-              setTimeout(function () {
-                $timer.animate({
-                  width : $timer.parent().width()
-                }, this.settings.timer, 'linear');
-              }.bind(this), this.settings.tip_animation_fade_speed);
-
-            } else {
-              this.settings.$next_tip.show();
-
-            }
-
-          } else if (/fade/i.test(this.settings.tip_animation)) {
-
-            $timer.width(0);
-
-            if (this.settings.timer > 0) {
-
-              this.settings.$next_tip
-                .fadeIn(this.settings.tip_animation_fade_speed)
-                .show();
-
-              setTimeout(function () {
-                $timer.animate({
-                  width : $timer.parent().width()
-                }, this.settings.timer, 'linear');
-              }.bind(this), this.settings.tip_animation_fade_speed);
-
-            } else {
-              this.settings.$next_tip.fadeIn(this.settings.tip_animation_fade_speed);
-            }
-          }
-
-          this.settings.$current_tip = this.settings.$next_tip;
-
-        // skip non-existant targets
-        } else if (this.settings.$li && this.settings.$target.length < 1) {
-
-          this.show(init, is_prev);
-
-        } else {
-
-          this.end();
-
-        }
-      } else {
-
-        this.settings.paused = true;
-
-      }
-
-    },
-
-    is_phone : function () {
-      return matchMedia(Foundation.media_queries.small).matches &&
-        !matchMedia(Foundation.media_queries.medium).matches;
-    },
-
-    hide : function () {
-      if (this.settings.modal && this.settings.expose) {
-        this.un_expose();
-      }
-
-      if (!this.settings.modal) {
-        $('.joyride-modal-bg').hide();
-      }
-
-      // Prevent scroll bouncing...wait to remove from layout
-      this.settings.$current_tip.css('visibility', 'hidden');
-      setTimeout($.proxy(function () {
-        this.hide();
-        this.css('visibility', 'visible');
-      }, this.settings.$current_tip), 0);
-      this.settings.post_step_callback(this.settings.$li.index(),
-        this.settings.$current_tip);
-    },
-
-    set_li : function (init, is_prev) {
-      if (init) {
-        this.settings.$li = this.settings.$tip_content.eq(this.settings.start_offset);
-        this.set_next_tip();
-        this.settings.$current_tip = this.settings.$next_tip;
-      } else {
-        if (is_prev) {
-          this.settings.$li = this.settings.$li.prev();
-        } else {
-          this.settings.$li = this.settings.$li.next();
-        }
-        this.set_next_tip();
-      }
-
-      this.set_target();
-    },
-
-    set_next_tip : function () {
-      this.settings.$next_tip = $('.joyride-tip-guide').eq(this.settings.$li.index());
-      this.settings.$next_tip.data('closed', '');
-    },
-
-    set_target : function () {
-      var cl = this.settings.$li.attr(this.add_namespace('data-class')),
-          id = this.settings.$li.attr(this.add_namespace('data-id')),
-          $sel = function () {
-            if (id) {
-              return $(document.getElementById(id));
-            } else if (cl) {
-              return $('.' + cl).first();
-            } else {
-              return $('body');
-            }
-          };
-
-      this.settings.$target = $sel();
-    },
-
-    scroll_to : function () {
-      var window_half, tipOffset;
-
-      window_half = $(window).height() / 2;
-      tipOffset = Math.ceil(this.settings.$target.offset().top - window_half + this.settings.$next_tip.outerHeight());
-
-      if (tipOffset != 0) {
-        $('html, body').stop().animate({
-          scrollTop : tipOffset
-        }, this.settings.scroll_speed, 'swing');
-      }
-    },
-
-    paused : function () {
-      return ($.inArray((this.settings.$li.index() + 1), this.settings.pause_after) === -1);
-    },
-
-    restart : function () {
-      this.hide();
-      this.settings.$li = undefined;
-      this.show('init');
-    },
-
-    pos_default : function (init) {
-      var $nub = this.settings.$next_tip.find('.joyride-nub'),
-          nub_width = Math.ceil($nub.outerWidth() / 2),
-          nub_height = Math.ceil($nub.outerHeight() / 2),
-          toggle = init || false;
-
-      // tip must not be "display: none" to calculate position
-      if (toggle) {
-        this.settings.$next_tip.css('visibility', 'hidden');
-        this.settings.$next_tip.show();
-      }
-
-      if (!/body/i.test(this.settings.$target.selector)) {
-          var topAdjustment = this.settings.tip_settings.tipAdjustmentY ? parseInt(this.settings.tip_settings.tipAdjustmentY) : 0,
-              leftAdjustment = this.settings.tip_settings.tipAdjustmentX ? parseInt(this.settings.tip_settings.tipAdjustmentX) : 0;
-
-          if (this.bottom()) {
-            if (this.rtl) {
-              this.settings.$next_tip.css({
-                top : (this.settings.$target.offset().top + nub_height + this.settings.$target.outerHeight() + topAdjustment),
-                left : this.settings.$target.offset().left + this.settings.$target.outerWidth() - this.settings.$next_tip.outerWidth() + leftAdjustment});
-            } else {
-              this.settings.$next_tip.css({
-                top : (this.settings.$target.offset().top + nub_height + this.settings.$target.outerHeight() + topAdjustment),
-                left : this.settings.$target.offset().left + leftAdjustment});
-            }
-
-            this.nub_position($nub, this.settings.tip_settings.nub_position, 'top');
-
-          } else if (this.top()) {
-            if (this.rtl) {
-              this.settings.$next_tip.css({
-                top : (this.settings.$target.offset().top - this.settings.$next_tip.outerHeight() - nub_height + topAdjustment),
-                left : this.settings.$target.offset().left + this.settings.$target.outerWidth() - this.settings.$next_tip.outerWidth()});
-            } else {
-              this.settings.$next_tip.css({
-                top : (this.settings.$target.offset().top - this.settings.$next_tip.outerHeight() - nub_height + topAdjustment),
-                left : this.settings.$target.offset().left + leftAdjustment});
-            }
-
-            this.nub_position($nub, this.settings.tip_settings.nub_position, 'bottom');
-
-          } else if (this.right()) {
-
-            this.settings.$next_tip.css({
-              top : this.settings.$target.offset().top + topAdjustment,
-              left : (this.settings.$target.outerWidth() + this.settings.$target.offset().left + nub_width + leftAdjustment)});
-
-            this.nub_position($nub, this.settings.tip_settings.nub_position, 'left');
-
-          } else if (this.left()) {
-
-            this.settings.$next_tip.css({
-              top : this.settings.$target.offset().top + topAdjustment,
-              left : (this.settings.$target.offset().left - this.settings.$next_tip.outerWidth() - nub_width + leftAdjustment)});
-
-            this.nub_position($nub, this.settings.tip_settings.nub_position, 'right');
-
-          }
-
-          if (!this.visible(this.corners(this.settings.$next_tip)) && this.settings.attempts < this.settings.tip_settings.tip_location_pattern.length) {
-
-            $nub.removeClass('bottom')
-              .removeClass('top')
-              .removeClass('right')
-              .removeClass('left');
-
-            this.settings.tip_settings.tip_location = this.settings.tip_settings.tip_location_pattern[this.settings.attempts];
-
-            this.settings.attempts++;
-
-            this.pos_default();
-
-          }
-
-      } else if (this.settings.$li.length) {
-
-        this.pos_modal($nub);
-
-      }
-
-      if (toggle) {
-        this.settings.$next_tip.hide();
-        this.settings.$next_tip.css('visibility', 'visible');
-      }
-
-    },
-
-    pos_phone : function (init) {
-      var tip_height = this.settings.$next_tip.outerHeight(),
-          tip_offset = this.settings.$next_tip.offset(),
-          target_height = this.settings.$target.outerHeight(),
-          $nub = $('.joyride-nub', this.settings.$next_tip),
-          nub_height = Math.ceil($nub.outerHeight() / 2),
-          toggle = init || false;
-
-      $nub.removeClass('bottom')
-        .removeClass('top')
-        .removeClass('right')
-        .removeClass('left');
-
-      if (toggle) {
-        this.settings.$next_tip.css('visibility', 'hidden');
-        this.settings.$next_tip.show();
-      }
-
-      if (!/body/i.test(this.settings.$target.selector)) {
-
-        if (this.top()) {
-
-            this.settings.$next_tip.offset({top : this.settings.$target.offset().top - tip_height - nub_height});
-            $nub.addClass('bottom');
-
-        } else {
-
-          this.settings.$next_tip.offset({top : this.settings.$target.offset().top + target_height + nub_height});
-          $nub.addClass('top');
-
-        }
-
-      } else if (this.settings.$li.length) {
-        this.pos_modal($nub);
-      }
-
-      if (toggle) {
-        this.settings.$next_tip.hide();
-        this.settings.$next_tip.css('visibility', 'visible');
-      }
-    },
-
-    pos_modal : function ($nub) {
-      this.center();
-      $nub.hide();
-
-      this.show_modal();
-    },
-
-    show_modal : function () {
-      if (!this.settings.$next_tip.data('closed')) {
-        var joyridemodalbg =  $('.joyride-modal-bg');
-        if (joyridemodalbg.length < 1) {
-          var joyridemodalbg = $(this.settings.template.modal);
-          joyridemodalbg.appendTo('body');
-        }
-
-        if (/pop/i.test(this.settings.tip_animation)) {
-            joyridemodalbg.show();
-        } else {
-            joyridemodalbg.fadeIn(this.settings.tip_animation_fade_speed);
-        }
-      }
-    },
-
-    expose : function () {
-      var expose,
-          exposeCover,
-          el,
-          origCSS,
-          origClasses,
-          randId = 'expose-' + this.random_str(6);
-
-      if (arguments.length > 0 && arguments[0] instanceof $) {
-        el = arguments[0];
-      } else if (this.settings.$target && !/body/i.test(this.settings.$target.selector)) {
-        el = this.settings.$target;
-      } else {
-        return false;
-      }
-
-      if (el.length < 1) {
-        if (window.console) {
-          console.error('element not valid', el);
-        }
-        return false;
-      }
-
-      expose = $(this.settings.template.expose);
-      this.settings.$body.append(expose);
-      expose.css({
-        top : el.offset().top,
-        left : el.offset().left,
-        width : el.outerWidth(true),
-        height : el.outerHeight(true)
-      });
-
-      exposeCover = $(this.settings.template.expose_cover);
-
-      origCSS = {
-        zIndex : el.css('z-index'),
-        position : el.css('position')
-      };
-
-      origClasses = el.attr('class') == null ? '' : el.attr('class');
-
-      el.css('z-index', parseInt(expose.css('z-index')) + 1);
-
-      if (origCSS.position == 'static') {
-        el.css('position', 'relative');
-      }
-
-      el.data('expose-css', origCSS);
-      el.data('orig-class', origClasses);
-      el.attr('class', origClasses + ' ' + this.settings.expose_add_class);
-
-      exposeCover.css({
-        top : el.offset().top,
-        left : el.offset().left,
-        width : el.outerWidth(true),
-        height : el.outerHeight(true)
-      });
-
-      if (this.settings.modal) {
-        this.show_modal();
-      }
-
-      this.settings.$body.append(exposeCover);
-      expose.addClass(randId);
-      exposeCover.addClass(randId);
-      el.data('expose', randId);
-      this.settings.post_expose_callback(this.settings.$li.index(), this.settings.$next_tip, el);
-      this.add_exposed(el);
-    },
-
-    un_expose : function () {
-      var exposeId,
-          el,
-          expose,
-          origCSS,
-          origClasses,
-          clearAll = false;
-
-      if (arguments.length > 0 && arguments[0] instanceof $) {
-        el = arguments[0];
-      } else if (this.settings.$target && !/body/i.test(this.settings.$target.selector)) {
-        el = this.settings.$target;
-      } else {
-        return false;
-      }
-
-      if (el.length < 1) {
-        if (window.console) {
-          console.error('element not valid', el);
-        }
-        return false;
-      }
-
-      exposeId = el.data('expose');
-      expose = $('.' + exposeId);
-
-      if (arguments.length > 1) {
-        clearAll = arguments[1];
-      }
-
-      if (clearAll === true) {
-        $('.joyride-expose-wrapper,.joyride-expose-cover').remove();
-      } else {
-        expose.remove();
-      }
-
-      origCSS = el.data('expose-css');
-
-      if (origCSS.zIndex == 'auto') {
-        el.css('z-index', '');
-      } else {
-        el.css('z-index', origCSS.zIndex);
-      }
-
-      if (origCSS.position != el.css('position')) {
-        if (origCSS.position == 'static') {// this is default, no need to set it.
-          el.css('position', '');
-        } else {
-          el.css('position', origCSS.position);
-        }
-      }
-
-      origClasses = el.data('orig-class');
-      el.attr('class', origClasses);
-      el.removeData('orig-classes');
-
-      el.removeData('expose');
-      el.removeData('expose-z-index');
-      this.remove_exposed(el);
-    },
-
-    add_exposed : function (el) {
-      this.settings.exposed = this.settings.exposed || [];
-      if (el instanceof $ || typeof el === 'object') {
-        this.settings.exposed.push(el[0]);
-      } else if (typeof el == 'string') {
-        this.settings.exposed.push(el);
-      }
-    },
-
-    remove_exposed : function (el) {
-      var search, i;
-      if (el instanceof $) {
-        search = el[0]
-      } else if (typeof el == 'string') {
-        search = el;
-      }
-
-      this.settings.exposed = this.settings.exposed || [];
-      i = this.settings.exposed.length;
-
-      while (i--) {
-        if (this.settings.exposed[i] == search) {
-          this.settings.exposed.splice(i, 1);
-          return;
-        }
-      }
-    },
-
-    center : function () {
-      var $w = $(window);
-
-      this.settings.$next_tip.css({
-        top : ((($w.height() - this.settings.$next_tip.outerHeight()) / 2) + $w.scrollTop()),
-        left : ((($w.width() - this.settings.$next_tip.outerWidth()) / 2) + $w.scrollLeft())
-      });
-
-      return true;
-    },
-
-    bottom : function () {
-      return /bottom/i.test(this.settings.tip_settings.tip_location);
-    },
-
-    top : function () {
-      return /top/i.test(this.settings.tip_settings.tip_location);
-    },
-
-    right : function () {
-      return /right/i.test(this.settings.tip_settings.tip_location);
-    },
-
-    left : function () {
-      return /left/i.test(this.settings.tip_settings.tip_location);
-    },
-
-    corners : function (el) {
-      var w = $(window),
-          window_half = w.height() / 2,
-          //using this to calculate since scroll may not have finished yet.
-          tipOffset = Math.ceil(this.settings.$target.offset().top - window_half + this.settings.$next_tip.outerHeight()),
-          right = w.width() + w.scrollLeft(),
-          offsetBottom =  w.height() + tipOffset,
-          bottom = w.height() + w.scrollTop(),
-          top = w.scrollTop();
-
-      if (tipOffset < top) {
-        if (tipOffset < 0) {
-          top = 0;
-        } else {
-          top = tipOffset;
-        }
-      }
-
-      if (offsetBottom > bottom) {
-        bottom = offsetBottom;
-      }
-
-      return [
-        el.offset().top < top,
-        right < el.offset().left + el.outerWidth(),
-        bottom < el.offset().top + el.outerHeight(),
-        w.scrollLeft() > el.offset().left
-      ];
-    },
-
-    visible : function (hidden_corners) {
-      var i = hidden_corners.length;
-
-      while (i--) {
-        if (hidden_corners[i]) {
-          return false;
-        }
-      }
-
-      return true;
-    },
-
-    nub_position : function (nub, pos, def) {
-      if (pos === 'auto') {
-        nub.addClass(def);
-      } else {
-        nub.addClass(pos);
-      }
-    },
-
-    startTimer : function () {
-      if (this.settings.$li.length) {
-        this.settings.automate = setTimeout(function () {
-          this.hide();
-          this.show();
-          this.startTimer();
-        }.bind(this), this.settings.timer);
-      } else {
-        clearTimeout(this.settings.automate);
-      }
-    },
-
-    end : function (abort) {
-      if (this.settings.cookie_monster) {
-        $.cookie(this.settings.cookie_name, 'ridden', {expires : this.settings.cookie_expires, domain : this.settings.cookie_domain});
-      }
-
-      if (this.settings.timer > 0) {
-        clearTimeout(this.settings.automate);
-      }
-
-      if (this.settings.modal && this.settings.expose) {
-        this.un_expose();
-      }
-
-      // Unplug keystrokes listener
-      $(this.scope).off('keyup.joyride')
-
-      this.settings.$next_tip.data('closed', true);
-      this.settings.riding = false;
-
-      $('.joyride-modal-bg').hide();
-      this.settings.$current_tip.hide();
-
-      if (typeof abort === 'undefined' || abort === false) {
-        this.settings.post_step_callback(this.settings.$li.index(), this.settings.$current_tip);
-        this.settings.post_ride_callback(this.settings.$li.index(), this.settings.$current_tip);
-      }
-
-      $('.joyride-tip-guide').remove();
-    },
-
-    off : function () {
-      $(this.scope).off('.joyride');
-      $(window).off('.joyride');
-      $('.joyride-close-tip, .joyride-next-tip, .joyride-modal-bg').off('.joyride');
-      $('.joyride-tip-guide, .joyride-modal-bg').remove();
-      clearTimeout(this.settings.automate);
-      this.settings = {};
-    },
-
-    reflow : function () {}
-  };
-}(jQuery, window, window.document));
-;;(function ($, window, document, undefined) {
-  'use strict';
-
-  Foundation.libs['magellan-expedition'] = {
-    name : 'magellan-expedition',
-
-    version : '5.5.2',
-
-    settings : {
-      active_class : 'active',
-      threshold : 0, // pixels from the top of the expedition for it to become fixes
-      destination_threshold : 20, // pixels from the top of destination for it to be considered active
-      throttle_delay : 30, // calculation throttling to increase framerate
-      fixed_top : 0, // top distance in pixels assigend to the fixed element on scroll
-      offset_by_height : true,  // whether to offset the destination by the expedition height. Usually you want this to be true, unless your expedition is on the side.
-      duration : 700, // animation duration time
-      easing : 'swing' // animation easing
-    },
-
-    init : function (scope, method, options) {
-      Foundation.inherit(this, 'throttle');
-      this.bindings(method, options);
-    },
-
-    events : function () {
-      var self = this,
-          S = self.S,
-          settings = self.settings;
-
-      // initialize expedition offset
-      self.set_expedition_position();
-
-      S(self.scope)
-        .off('.magellan')
-        .on('click.fndtn.magellan', '[' + self.add_namespace('data-magellan-arrival') + '] a[href*=#]', function (e) {
-          var sameHost = ((this.hostname === location.hostname) || !this.hostname),
-              samePath = self.filterPathname(location.pathname) === self.filterPathname(this.pathname),
-              testHash = this.hash.replace(/(:|\.|\/)/g, '\\$1'),
-              anchor = this;
-
-          if (sameHost && samePath && testHash) {
-            e.preventDefault();
-            var expedition = $(this).closest('[' + self.attr_name() + ']'),
-                settings = expedition.data('magellan-expedition-init'),
-                hash = this.hash.split('#').join(''),
-                target = $('a[name="' + hash + '"]');
-
-            if (target.length === 0) {
-              target = $('#' + hash);
-
-            }
-
-            // Account for expedition height if fixed position
-            var scroll_top = target.offset().top - settings.destination_threshold + 1;
-            if (settings.offset_by_height) {
-              scroll_top = scroll_top - expedition.outerHeight();
-            }
-            $('html, body').stop().animate({
-              'scrollTop' : scroll_top
-            }, settings.duration, settings.easing, function () {
-              if (history.pushState) {
-                        history.pushState(null, null, anchor.pathname + '#' + hash);
-              }
-                    else {
-                        location.hash = anchor.pathname + '#' + hash;
-                    }
-            });
-          }
-        })
-        .on('scroll.fndtn.magellan', self.throttle(this.check_for_arrivals.bind(this), settings.throttle_delay));
-    },
-
-    check_for_arrivals : function () {
-      var self = this;
-      self.update_arrivals();
-      self.update_expedition_positions();
-    },
-
-    set_expedition_position : function () {
-      var self = this;
-      $('[' + this.attr_name() + '=fixed]', self.scope).each(function (idx, el) {
-        var expedition = $(this),
-            settings = expedition.data('magellan-expedition-init'),
-            styles = expedition.attr('styles'), // save styles
-            top_offset, fixed_top;
-
-        expedition.attr('style', '');
-        top_offset = expedition.offset().top + settings.threshold;
-
-        //set fixed-top by attribute
-        fixed_top = parseInt(expedition.data('magellan-fixed-top'));
-        if (!isNaN(fixed_top)) {
-          self.settings.fixed_top = fixed_top;
-        }
-
-        expedition.data(self.data_attr('magellan-top-offset'), top_offset);
-        expedition.attr('style', styles);
-      });
-    },
-
-    update_expedition_positions : function () {
-      var self = this,
-          window_top_offset = $(window).scrollTop();
-
-      $('[' + this.attr_name() + '=fixed]', self.scope).each(function () {
-        var expedition = $(this),
-            settings = expedition.data('magellan-expedition-init'),
-            styles = expedition.attr('style'), // save styles
-            top_offset = expedition.data('magellan-top-offset');
-
-        //scroll to the top distance
-        if (window_top_offset + self.settings.fixed_top >= top_offset) {
-          // Placeholder allows height calculations to be consistent even when
-          // appearing to switch between fixed/non-fixed placement
-          var placeholder = expedition.prev('[' + self.add_namespace('data-magellan-expedition-clone') + ']');
-          if (placeholder.length === 0) {
-            placeholder = expedition.clone();
-            placeholder.removeAttr(self.attr_name());
-            placeholder.attr(self.add_namespace('data-magellan-expedition-clone'), '');
-            expedition.before(placeholder);
-          }
-          expedition.css({position :'fixed', top : settings.fixed_top}).addClass('fixed');
-        } else {
-          expedition.prev('[' + self.add_namespace('data-magellan-expedition-clone') + ']').remove();
-          expedition.attr('style', styles).css('position', '').css('top', '').removeClass('fixed');
-        }
-      });
-    },
-
-    update_arrivals : function () {
-      var self = this,
-          window_top_offset = $(window).scrollTop();
-
-      $('[' + this.attr_name() + ']', self.scope).each(function () {
-        var expedition = $(this),
-            settings = expedition.data(self.attr_name(true) + '-init'),
-            offsets = self.offsets(expedition, window_top_offset),
-            arrivals = expedition.find('[' + self.add_namespace('data-magellan-arrival') + ']'),
-            active_item = false;
-        offsets.each(function (idx, item) {
-          if (item.viewport_offset >= item.top_offset) {
-            var arrivals = expedition.find('[' + self.add_namespace('data-magellan-arrival') + ']');
-            arrivals.not(item.arrival).removeClass(settings.active_class);
-            item.arrival.addClass(settings.active_class);
-            active_item = true;
-            return true;
-          }
-        });
-
-        if (!active_item) {
-          arrivals.removeClass(settings.active_class);
-        }
-      });
-    },
-
-    offsets : function (expedition, window_offset) {
-      var self = this,
-          settings = expedition.data(self.attr_name(true) + '-init'),
-          viewport_offset = window_offset;
-
-      return expedition.find('[' + self.add_namespace('data-magellan-arrival') + ']').map(function (idx, el) {
-        var name = $(this).data(self.data_attr('magellan-arrival')),
-            dest = $('[' + self.add_namespace('data-magellan-destination') + '=' + name + ']');
-        if (dest.length > 0) {
-          var top_offset = dest.offset().top - settings.destination_threshold;
-          if (settings.offset_by_height) {
-            top_offset = top_offset - expedition.outerHeight();
-          }
-          top_offset = Math.floor(top_offset);
-          return {
-            destination : dest,
-            arrival : $(this),
-            top_offset : top_offset,
-            viewport_offset : viewport_offset
-          }
-        }
-      }).sort(function (a, b) {
-        if (a.top_offset < b.top_offset) {
-          return -1;
-        }
-        if (a.top_offset > b.top_offset) {
-          return 1;
-        }
-        return 0;
-      });
-    },
-
-    data_attr : function (str) {
-      if (this.namespace.length > 0) {
-        return this.namespace + '-' + str;
-      }
-
-      return str;
-    },
-
-    off : function () {
-      this.S(this.scope).off('.magellan');
-      this.S(window).off('.magellan');
-    },
-
-    filterPathname : function (pathname) {
-      pathname = pathname || '';
-      return pathname
-          .replace(/^\//,'')
-          .replace(/(?:index|default).[a-zA-Z]{3,4}$/,'')
-          .replace(/\/$/,'');
-    },
-
-    reflow : function () {
-      var self = this;
-      // remove placeholder expeditions used for height calculation purposes
-      $('[' + self.add_namespace('data-magellan-expedition-clone') + ']', self.scope).remove();
+    if (!found) {
+      registeredComponents_.push(newConfig);
     }
-  };
-}(jQuery, window, window.document));
-;;(function ($, window, document, undefined) {
-  'use strict';
-
-  Foundation.libs.offcanvas = {
-    name : 'offcanvas',
-
-    version : '5.5.2',
-
-    settings : {
-      open_method : 'move',
-      close_on_click : false
-    },
-
-    init : function (scope, method, options) {
-      this.bindings(method, options);
-    },
-
-    events : function () {
-      var self = this,
-          S = self.S,
-          move_class = '',
-          right_postfix = '',
-          left_postfix = '';
-
-      if (this.settings.open_method === 'move') {
-        move_class = 'move-';
-        right_postfix = 'right';
-        left_postfix = 'left';
-      } else if (this.settings.open_method === 'overlap_single') {
-        move_class = 'offcanvas-overlap-';
-        right_postfix = 'right';
-        left_postfix = 'left';
-      } else if (this.settings.open_method === 'overlap') {
-        move_class = 'offcanvas-overlap';
-      }
-
-      S(this.scope).off('.offcanvas')
-        .on('click.fndtn.offcanvas', '.left-off-canvas-toggle', function (e) {
-          self.click_toggle_class(e, move_class + right_postfix);
-          if (self.settings.open_method !== 'overlap') {
-            S('.left-submenu').removeClass(move_class + right_postfix);
-          }
-          $('.left-off-canvas-toggle').attr('aria-expanded', 'true');
-        })
-        .on('click.fndtn.offcanvas', '.left-off-canvas-menu a', function (e) {
-          var settings = self.get_settings(e);
-          var parent = S(this).parent();
-
-          if (settings.close_on_click && !parent.hasClass('has-submenu') && !parent.hasClass('back')) {
-            self.hide.call(self, move_class + right_postfix, self.get_wrapper(e));
-            parent.parent().removeClass(move_class + right_postfix);
-          } else if (S(this).parent().hasClass('has-submenu')) {
-            e.preventDefault();
-            S(this).siblings('.left-submenu').toggleClass(move_class + right_postfix);
-          } else if (parent.hasClass('back')) {
-            e.preventDefault();
-            parent.parent().removeClass(move_class + right_postfix);
-          }
-          $('.left-off-canvas-toggle').attr('aria-expanded', 'true');
-        })
-        .on('click.fndtn.offcanvas', '.right-off-canvas-toggle', function (e) {
-          self.click_toggle_class(e, move_class + left_postfix);
-          if (self.settings.open_method !== 'overlap') {
-            S('.right-submenu').removeClass(move_class + left_postfix);
-          }
-          $('.right-off-canvas-toggle').attr('aria-expanded', 'true');
-        })
-        .on('click.fndtn.offcanvas', '.right-off-canvas-menu a', function (e) {
-          var settings = self.get_settings(e);
-          var parent = S(this).parent();
-
-          if (settings.close_on_click && !parent.hasClass('has-submenu') && !parent.hasClass('back')) {
-            self.hide.call(self, move_class + left_postfix, self.get_wrapper(e));
-            parent.parent().removeClass(move_class + left_postfix);
-          } else if (S(this).parent().hasClass('has-submenu')) {
-            e.preventDefault();
-            S(this).siblings('.right-submenu').toggleClass(move_class + left_postfix);
-          } else if (parent.hasClass('back')) {
-            e.preventDefault();
-            parent.parent().removeClass(move_class + left_postfix);
-          }
-          $('.right-off-canvas-toggle').attr('aria-expanded', 'true');
-        })
-        .on('click.fndtn.offcanvas', '.exit-off-canvas', function (e) {
-          self.click_remove_class(e, move_class + left_postfix);
-          S('.right-submenu').removeClass(move_class + left_postfix);
-          if (right_postfix) {
-            self.click_remove_class(e, move_class + right_postfix);
-            S('.left-submenu').removeClass(move_class + left_postfix);
-          }
-          $('.right-off-canvas-toggle').attr('aria-expanded', 'true');
-        })
-        .on('click.fndtn.offcanvas', '.exit-off-canvas', function (e) {
-          self.click_remove_class(e, move_class + left_postfix);
-          $('.left-off-canvas-toggle').attr('aria-expanded', 'false');
-          if (right_postfix) {
-            self.click_remove_class(e, move_class + right_postfix);
-            $('.right-off-canvas-toggle').attr('aria-expanded', 'false');
-          }
-        });
-    },
-
-    toggle : function (class_name, $off_canvas) {
-      $off_canvas = $off_canvas || this.get_wrapper();
-      if ($off_canvas.is('.' + class_name)) {
-        this.hide(class_name, $off_canvas);
-      } else {
-        this.show(class_name, $off_canvas);
-      }
-    },
-
-    show : function (class_name, $off_canvas) {
-      $off_canvas = $off_canvas || this.get_wrapper();
-      $off_canvas.trigger('open.fndtn.offcanvas');
-      $off_canvas.addClass(class_name);
-    },
-
-    hide : function (class_name, $off_canvas) {
-      $off_canvas = $off_canvas || this.get_wrapper();
-      $off_canvas.trigger('close.fndtn.offcanvas');
-      $off_canvas.removeClass(class_name);
-    },
-
-    click_toggle_class : function (e, class_name) {
-      e.preventDefault();
-      var $off_canvas = this.get_wrapper(e);
-      this.toggle(class_name, $off_canvas);
-    },
-
-    click_remove_class : function (e, class_name) {
-      e.preventDefault();
-      var $off_canvas = this.get_wrapper(e);
-      this.hide(class_name, $off_canvas);
-    },
-
-    get_settings : function (e) {
-      var offcanvas  = this.S(e.target).closest('[' + this.attr_name() + ']');
-      return offcanvas.data(this.attr_name(true) + '-init') || this.settings;
-    },
-
-    get_wrapper : function (e) {
-      var $off_canvas = this.S(e ? e.target : this.scope).closest('.off-canvas-wrap');
-
-      if ($off_canvas.length === 0) {
-        $off_canvas = this.S('.off-canvas-wrap');
-      }
-      return $off_canvas;
-    },
-
-    reflow : function () {}
-  };
-}(jQuery, window, window.document));
-;;(function ($, window, document, undefined) {
-  'use strict';
-
-  var noop = function () {};
-
-  var Orbit = function (el, settings) {
-    // Don't reinitialize plugin
-    if (el.hasClass(settings.slides_container_class)) {
-      return this;
-    }
-
-    var self = this,
-        container,
-        slides_container = el,
-        number_container,
-        bullets_container,
-        timer_container,
-        idx = 0,
-        animate,
-        timer,
-        locked = false,
-        adjust_height_after = false;
-
-    self.slides = function () {
-      return slides_container.children(settings.slide_selector);
-    };
-
-    self.slides().first().addClass(settings.active_slide_class);
-
-    self.update_slide_number = function (index) {
-      if (settings.slide_number) {
-        number_container.find('span:first').text(parseInt(index) + 1);
-        number_container.find('span:last').text(self.slides().length);
-      }
-      if (settings.bullets) {
-        bullets_container.children().removeClass(settings.bullets_active_class);
-        $(bullets_container.children().get(index)).addClass(settings.bullets_active_class);
-      }
-    };
-
-    self.update_active_link = function (index) {
-      var link = $('[data-orbit-link="' + self.slides().eq(index).attr('data-orbit-slide') + '"]');
-      link.siblings().removeClass(settings.bullets_active_class);
-      link.addClass(settings.bullets_active_class);
-    };
-
-    self.build_markup = function () {
-      slides_container.wrap('<div class="' + settings.container_class + '"></div>');
-      container = slides_container.parent();
-      slides_container.addClass(settings.slides_container_class);
-
-      if (settings.stack_on_small) {
-        container.addClass(settings.stack_on_small_class);
-      }
-
-      if (settings.navigation_arrows) {
-        container.append($('<a href="#"><span></span></a>').addClass(settings.prev_class));
-        container.append($('<a href="#"><span></span></a>').addClass(settings.next_class));
-      }
-
-      if (settings.timer) {
-        timer_container = $('<div>').addClass(settings.timer_container_class);
-        timer_container.append('<span>');
-        timer_container.append($('<div>').addClass(settings.timer_progress_class));
-        timer_container.addClass(settings.timer_paused_class);
-        container.append(timer_container);
-      }
-
-      if (settings.slide_number) {
-        number_container = $('<div>').addClass(settings.slide_number_class);
-        number_container.append('<span></span> ' + settings.slide_number_text + ' <span></span>');
-        container.append(number_container);
-      }
-
-      if (settings.bullets) {
-        bullets_container = $('<ol>').addClass(settings.bullets_container_class);
-        container.append(bullets_container);
-        bullets_container.wrap('<div class="orbit-bullets-container"></div>');
-        self.slides().each(function (idx, el) {
-          var bullet = $('<li>').attr('data-orbit-slide', idx).on('click', self.link_bullet);;
-          bullets_container.append(bullet);
-        });
-      }
-
-    };
-
-    self._goto = function (next_idx, start_timer) {
-      // if (locked) {return false;}
-      if (next_idx === idx) {return false;}
-      if (typeof timer === 'object') {timer.restart();}
-      var slides = self.slides();
-
-      var dir = 'next';
-      locked = true;
-      if (next_idx < idx) {dir = 'prev';}
-      if (next_idx >= slides.length) {
-        if (!settings.circular) {
-          return false;
-        }
-        next_idx = 0;
-      } else if (next_idx < 0) {
-        if (!settings.circular) {
-          return false;
-        }
-        next_idx = slides.length - 1;
-      }
-
-      var current = $(slides.get(idx));
-      var next = $(slides.get(next_idx));
-
-      current.css('zIndex', 2);
-      current.removeClass(settings.active_slide_class);
-      next.css('zIndex', 4).addClass(settings.active_slide_class);
-
-      slides_container.trigger('before-slide-change.fndtn.orbit');
-      settings.before_slide_change();
-      self.update_active_link(next_idx);
-
-      var callback = function () {
-        var unlock = function () {
-          idx = next_idx;
-          locked = false;
-          if (start_timer === true) {timer = self.create_timer(); timer.start();}
-          self.update_slide_number(idx);
-          slides_container.trigger('after-slide-change.fndtn.orbit', [{slide_number : idx, total_slides : slides.length}]);
-          settings.after_slide_change(idx, slides.length);
-        };
-        if (slides_container.outerHeight() != next.outerHeight() && settings.variable_height) {
-          slides_container.animate({'height': next.outerHeight()}, 250, 'linear', unlock);
-        } else {
-          unlock();
-        }
-      };
-
-      if (slides.length === 1) {callback(); return false;}
-
-      var start_animation = function () {
-        if (dir === 'next') {animate.next(current, next, callback);}
-        if (dir === 'prev') {animate.prev(current, next, callback);}
-      };
-
-      if (next.outerHeight() > slides_container.outerHeight() && settings.variable_height) {
-        slides_container.animate({'height': next.outerHeight()}, 250, 'linear', start_animation);
-      } else {
-        start_animation();
-      }
-    };
-
-    self.next = function (e) {
-      e.stopImmediatePropagation();
-      e.preventDefault();
-      self._goto(idx + 1);
-    };
-
-    self.prev = function (e) {
-      e.stopImmediatePropagation();
-      e.preventDefault();
-      self._goto(idx - 1);
-    };
-
-    self.link_custom = function (e) {
-      e.preventDefault();
-      var link = $(this).attr('data-orbit-link');
-      if ((typeof link === 'string') && (link = $.trim(link)) != '') {
-        var slide = container.find('[data-orbit-slide=' + link + ']');
-        if (slide.index() != -1) {self._goto(slide.index());}
-      }
-    };
-
-    self.link_bullet = function (e) {
-      var index = $(this).attr('data-orbit-slide');
-      if ((typeof index === 'string') && (index = $.trim(index)) != '') {
-        if (isNaN(parseInt(index))) {
-          var slide = container.find('[data-orbit-slide=' + index + ']');
-          if (slide.index() != -1) {self._goto(slide.index() + 1);}
-        } else {
-          self._goto(parseInt(index));
-        }
-      }
-
-    }
-
-    self.timer_callback = function () {
-      self._goto(idx + 1, true);
-    }
-
-    self.compute_dimensions = function () {
-      var current = $(self.slides().get(idx));
-      var h = current.outerHeight();
-      if (!settings.variable_height) {
-        self.slides().each(function(){
-          if ($(this).outerHeight() > h) { h = $(this).outerHeight(); }
-        });
-      }
-      slides_container.height(h);
-    };
-
-    self.create_timer = function () {
-      var t = new Timer(
-        container.find('.' + settings.timer_container_class),
-        settings,
-        self.timer_callback
-      );
-      return t;
-    };
-
-    self.stop_timer = function () {
-      if (typeof timer === 'object') {
-        timer.stop();
-      }
-    };
-
-    self.toggle_timer = function () {
-      var t = container.find('.' + settings.timer_container_class);
-      if (t.hasClass(settings.timer_paused_class)) {
-        if (typeof timer === 'undefined') {timer = self.create_timer();}
-        timer.start();
-      } else {
-        if (typeof timer === 'object') {timer.stop();}
-      }
-    };
-
-    self.init = function () {
-      self.build_markup();
-      if (settings.timer) {
-        timer = self.create_timer();
-        Foundation.utils.image_loaded(this.slides().children('img'), timer.start);
-      }
-      animate = new FadeAnimation(settings, slides_container);
-      if (settings.animation === 'slide') {
-        animate = new SlideAnimation(settings, slides_container);
-      }
-
-      container.on('click', '.' + settings.next_class, self.next);
-      container.on('click', '.' + settings.prev_class, self.prev);
-
-      if (settings.next_on_click) {
-        container.on('click', '.' + settings.slides_container_class + ' [data-orbit-slide]', self.link_bullet);
-      }
-
-      container.on('click', self.toggle_timer);
-      if (settings.swipe) {
-        container.on('touchstart.fndtn.orbit', function (e) {
-          if (!e.touches) {e = e.originalEvent;}
-          var data = {
-            start_page_x : e.touches[0].pageX,
-            start_page_y : e.touches[0].pageY,
-            start_time : (new Date()).getTime(),
-            delta_x : 0,
-            is_scrolling : undefined
-          };
-          container.data('swipe-transition', data);
-          e.stopPropagation();
-        })
-        .on('touchmove.fndtn.orbit', function (e) {
-          if (!e.touches) {
-            e = e.originalEvent;
-          }
-          // Ignore pinch/zoom events
-          if (e.touches.length > 1 || e.scale && e.scale !== 1) {
-            return;
-          }
-
-          var data = container.data('swipe-transition');
-          if (typeof data === 'undefined') {data = {};}
-
-          data.delta_x = e.touches[0].pageX - data.start_page_x;
-
-          if ( typeof data.is_scrolling === 'undefined') {
-            data.is_scrolling = !!( data.is_scrolling || Math.abs(data.delta_x) < Math.abs(e.touches[0].pageY - data.start_page_y) );
-          }
-
-          if (!data.is_scrolling && !data.active) {
-            e.preventDefault();
-            var direction = (data.delta_x < 0) ? (idx + 1) : (idx - 1);
-            data.active = true;
-            self._goto(direction);
-          }
-        })
-        .on('touchend.fndtn.orbit', function (e) {
-          container.data('swipe-transition', {});
-          e.stopPropagation();
-        })
-      }
-      container.on('mouseenter.fndtn.orbit', function (e) {
-        if (settings.timer && settings.pause_on_hover) {
-          self.stop_timer();
-        }
-      })
-      .on('mouseleave.fndtn.orbit', function (e) {
-        if (settings.timer && settings.resume_on_mouseout) {
-          timer.start();
-        }
-      });
-
-      $(document).on('click', '[data-orbit-link]', self.link_custom);
-      $(window).on('load resize', self.compute_dimensions);
-      Foundation.utils.image_loaded(this.slides().children('img'), self.compute_dimensions);
-      Foundation.utils.image_loaded(this.slides().children('img'), function () {
-        container.prev('.' + settings.preloader_class).css('display', 'none');
-        self.update_slide_number(0);
-        self.update_active_link(0);
-        slides_container.trigger('ready.fndtn.orbit');
-      });
-    };
-
-    self.init();
-  };
-
-  var Timer = function (el, settings, callback) {
-    var self = this,
-        duration = settings.timer_speed,
-        progress = el.find('.' + settings.timer_progress_class),
-        start,
-        timeout,
-        left = -1;
-
-    this.update_progress = function (w) {
-      var new_progress = progress.clone();
-      new_progress.attr('style', '');
-      new_progress.css('width', w + '%');
-      progress.replaceWith(new_progress);
-      progress = new_progress;
-    };
-
-    this.restart = function () {
-      clearTimeout(timeout);
-      el.addClass(settings.timer_paused_class);
-      left = -1;
-      self.update_progress(0);
-    };
-
-    this.start = function () {
-      if (!el.hasClass(settings.timer_paused_class)) {return true;}
-      left = (left === -1) ? duration : left;
-      el.removeClass(settings.timer_paused_class);
-      start = new Date().getTime();
-      progress.animate({'width' : '100%'}, left, 'linear');
-      timeout = setTimeout(function () {
-        self.restart();
-        callback();
-      }, left);
-      el.trigger('timer-started.fndtn.orbit')
-    };
-
-    this.stop = function () {
-      if (el.hasClass(settings.timer_paused_class)) {return true;}
-      clearTimeout(timeout);
-      el.addClass(settings.timer_paused_class);
-      var end = new Date().getTime();
-      left = left - (end - start);
-      var w = 100 - ((left / duration) * 100);
-      self.update_progress(w);
-      el.trigger('timer-stopped.fndtn.orbit');
-    };
-  };
-
-  var SlideAnimation = function (settings, container) {
-    var duration = settings.animation_speed;
-    var is_rtl = ($('html[dir=rtl]').length === 1);
-    var margin = is_rtl ? 'marginRight' : 'marginLeft';
-    var animMargin = {};
-    animMargin[margin] = '0%';
-
-    this.next = function (current, next, callback) {
-      current.animate({marginLeft : '-100%'}, duration);
-      next.animate(animMargin, duration, function () {
-        current.css(margin, '100%');
-        callback();
-      });
-    };
-
-    this.prev = function (current, prev, callback) {
-      current.animate({marginLeft : '100%'}, duration);
-      prev.css(margin, '-100%');
-      prev.animate(animMargin, duration, function () {
-        current.css(margin, '100%');
-        callback();
-      });
-    };
-  };
-
-  var FadeAnimation = function (settings, container) {
-    var duration = settings.animation_speed;
-    var is_rtl = ($('html[dir=rtl]').length === 1);
-    var margin = is_rtl ? 'marginRight' : 'marginLeft';
-
-    this.next = function (current, next, callback) {
-      next.css({'margin' : '0%', 'opacity' : '0.01'});
-      next.animate({'opacity' :'1'}, duration, 'linear', function () {
-        current.css('margin', '100%');
-        callback();
-      });
-    };
-
-    this.prev = function (current, prev, callback) {
-      prev.css({'margin' : '0%', 'opacity' : '0.01'});
-      prev.animate({'opacity' : '1'}, duration, 'linear', function () {
-        current.css('margin', '100%');
-        callback();
-      });
-    };
-  };
-
-  Foundation.libs = Foundation.libs || {};
-
-  Foundation.libs.orbit = {
-    name : 'orbit',
-
-    version : '5.5.2',
-
-    settings : {
-      animation : 'slide',
-      timer_speed : 10000,
-      pause_on_hover : true,
-      resume_on_mouseout : false,
-      next_on_click : true,
-      animation_speed : 500,
-      stack_on_small : false,
-      navigation_arrows : true,
-      slide_number : true,
-      slide_number_text : 'of',
-      container_class : 'orbit-container',
-      stack_on_small_class : 'orbit-stack-on-small',
-      next_class : 'orbit-next',
-      prev_class : 'orbit-prev',
-      timer_container_class : 'orbit-timer',
-      timer_paused_class : 'paused',
-      timer_progress_class : 'orbit-progress',
-      slides_container_class : 'orbit-slides-container',
-      preloader_class : 'preloader',
-      slide_selector : '*',
-      bullets_container_class : 'orbit-bullets',
-      bullets_active_class : 'active',
-      slide_number_class : 'orbit-slide-number',
-      caption_class : 'orbit-caption',
-      active_slide_class : 'active',
-      orbit_transition_class : 'orbit-transitioning',
-      bullets : true,
-      circular : true,
-      timer : true,
-      variable_height : false,
-      swipe : true,
-      before_slide_change : noop,
-      after_slide_change : noop
-    },
-
-    init : function (scope, method, options) {
-      var self = this;
-      this.bindings(method, options);
-    },
-
-    events : function (instance) {
-      var orbit_instance = new Orbit(this.S(instance), this.S(instance).data('orbit-init'));
-      this.S(instance).data(this.name + '-instance', orbit_instance);
-    },
-
-    reflow : function () {
-      var self = this;
-
-      if (self.S(self.scope).is('[data-orbit]')) {
-        var $el = self.S(self.scope);
-        var instance = $el.data(self.name + '-instance');
-        instance.compute_dimensions();
-      } else {
-        self.S('[data-orbit]', self.scope).each(function (idx, el) {
-          var $el = self.S(el);
-          var opts = self.data_options($el);
-          var instance = $el.data(self.name + '-instance');
-          instance.compute_dimensions();
-        });
-      }
-    }
-  };
-
-}(jQuery, window, window.document));
-;;(function ($, window, document, undefined) {
-  'use strict';
-
-  Foundation.libs.reveal = {
-    name : 'reveal',
-
-    version : '5.5.2',
-
-    locked : false,
-
-    settings : {
-      animation : 'fadeAndPop',
-      animation_speed : 250,
-      close_on_background_click : true,
-      close_on_esc : true,
-      dismiss_modal_class : 'close-reveal-modal',
-      multiple_opened : false,
-      bg_class : 'reveal-modal-bg',
-      root_element : 'body',
-      open : function(){},
-      opened : function(){},
-      close : function(){},
-      closed : function(){},
-      on_ajax_error: $.noop,
-      bg : $('.reveal-modal-bg'),
-      css : {
-        open : {
-          'opacity' : 0,
-          'visibility' : 'visible',
-          'display' : 'block'
-        },
-        close : {
-          'opacity' : 1,
-          'visibility' : 'hidden',
-          'display' : 'none'
-        }
-      }
-    },
-
-    init : function (scope, method, options) {
-      $.extend(true, this.settings, method, options);
-      this.bindings(method, options);
-    },
-
-    events : function (scope) {
-      var self = this,
-          S = self.S;
-
-      S(this.scope)
-        .off('.reveal')
-        .on('click.fndtn.reveal', '[' + this.add_namespace('data-reveal-id') + ']:not([disabled])', function (e) {
-          e.preventDefault();
-
-          if (!self.locked) {
-            var element = S(this),
-                ajax = element.data(self.data_attr('reveal-ajax')),
-                replaceContentSel = element.data(self.data_attr('reveal-replace-content'));
-
-            self.locked = true;
-
-            if (typeof ajax === 'undefined') {
-              self.open.call(self, element);
-            } else {
-              var url = ajax === true ? element.attr('href') : ajax;
-              self.open.call(self, element, {url : url}, { replaceContentSel : replaceContentSel });
-            }
-          }
-        });
-
-      S(document)
-        .on('click.fndtn.reveal', this.close_targets(), function (e) {
-          e.preventDefault();
-          if (!self.locked) {
-            var settings = S('[' + self.attr_name() + '].open').data(self.attr_name(true) + '-init') || self.settings,
-                bg_clicked = S(e.target)[0] === S('.' + settings.bg_class)[0];
-
-            if (bg_clicked) {
-              if (settings.close_on_background_click) {
-                e.stopPropagation();
-              } else {
-                return;
-              }
-            }
-
-            self.locked = true;
-            self.close.call(self, bg_clicked ? S('[' + self.attr_name() + '].open:not(.toback)') : S(this).closest('[' + self.attr_name() + ']'));
-          }
-        });
-
-      if (S('[' + self.attr_name() + ']', this.scope).length > 0) {
-        S(this.scope)
-          // .off('.reveal')
-          .on('open.fndtn.reveal', this.settings.open)
-          .on('opened.fndtn.reveal', this.settings.opened)
-          .on('opened.fndtn.reveal', this.open_video)
-          .on('close.fndtn.reveal', this.settings.close)
-          .on('closed.fndtn.reveal', this.settings.closed)
-          .on('closed.fndtn.reveal', this.close_video);
-      } else {
-        S(this.scope)
-          // .off('.reveal')
-          .on('open.fndtn.reveal', '[' + self.attr_name() + ']', this.settings.open)
-          .on('opened.fndtn.reveal', '[' + self.attr_name() + ']', this.settings.opened)
-          .on('opened.fndtn.reveal', '[' + self.attr_name() + ']', this.open_video)
-          .on('close.fndtn.reveal', '[' + self.attr_name() + ']', this.settings.close)
-          .on('closed.fndtn.reveal', '[' + self.attr_name() + ']', this.settings.closed)
-          .on('closed.fndtn.reveal', '[' + self.attr_name() + ']', this.close_video);
-      }
-
-      return true;
-    },
-
-    // PATCH #3: turning on key up capture only when a reveal window is open
-    key_up_on : function (scope) {
-      var self = this;
-
-      // PATCH #1: fixing multiple keyup event trigger from single key press
-      self.S('body').off('keyup.fndtn.reveal').on('keyup.fndtn.reveal', function ( event ) {
-        var open_modal = self.S('[' + self.attr_name() + '].open'),
-            settings = open_modal.data(self.attr_name(true) + '-init') || self.settings ;
-        // PATCH #2: making sure that the close event can be called only while unlocked,
-        //           so that multiple keyup.fndtn.reveal events don't prevent clean closing of the reveal window.
-        if ( settings && event.which === 27  && settings.close_on_esc && !self.locked) { // 27 is the keycode for the Escape key
-          self.close.call(self, open_modal);
-        }
-      });
-
-      return true;
-    },
-
-    // PATCH #3: turning on key up capture only when a reveal window is open
-    key_up_off : function (scope) {
-      this.S('body').off('keyup.fndtn.reveal');
-      return true;
-    },
-
-    open : function (target, ajax_settings) {
-      var self = this,
-          modal;
-
-      if (target) {
-        if (typeof target.selector !== 'undefined') {
-          // Find the named node; only use the first one found, since the rest of the code assumes there's only one node
-          modal = self.S('#' + target.data(self.data_attr('reveal-id'))).first();
-        } else {
-          modal = self.S(this.scope);
-
-          ajax_settings = target;
-        }
-      } else {
-        modal = self.S(this.scope);
-      }
-
-      var settings = modal.data(self.attr_name(true) + '-init');
-      settings = settings || this.settings;
-
-
-      if (modal.hasClass('open') && target.attr('data-reveal-id') == modal.attr('id')) {
-        return self.close(modal);
-      }
-
-      if (!modal.hasClass('open')) {
-        var open_modal = self.S('[' + self.attr_name() + '].open');
-
-        if (typeof modal.data('css-top') === 'undefined') {
-          modal.data('css-top', parseInt(modal.css('top'), 10))
-            .data('offset', this.cache_offset(modal));
-        }
-
-        modal.attr('tabindex','0').attr('aria-hidden','false');
-
-        this.key_up_on(modal);    // PATCH #3: turning on key up capture only when a reveal window is open
-
-        // Prevent namespace event from triggering twice
-        modal.on('open.fndtn.reveal', function(e) {
-          if (e.namespace !== 'fndtn.reveal') return;
-        });
-
-        modal.on('open.fndtn.reveal').trigger('open.fndtn.reveal');
-
-        if (open_modal.length < 1) {
-          this.toggle_bg(modal, true);
-        }
-
-        if (typeof ajax_settings === 'string') {
-          ajax_settings = {
-            url : ajax_settings
-          };
-        }
-
-        if (typeof ajax_settings === 'undefined' || !ajax_settings.url) {
-          if (open_modal.length > 0) {
-            if (settings.multiple_opened) {
-              self.to_back(open_modal);
-            } else {
-              self.hide(open_modal, settings.css.close);
-            }
-          }
-
-          this.show(modal, settings.css.open);
-        } else {
-          var old_success = typeof ajax_settings.success !== 'undefined' ? ajax_settings.success : null;
-          $.extend(ajax_settings, {
-            success : function (data, textStatus, jqXHR) {
-              if ( $.isFunction(old_success) ) {
-                var result = old_success(data, textStatus, jqXHR);
-                if (typeof result == 'string') {
-                  data = result;
-                }
-              }
-
-              if (typeof options !== 'undefined' && typeof options.replaceContentSel !== 'undefined') {
-                modal.find(options.replaceContentSel).html(data);
-              } else {
-                modal.html(data);
-              }
-
-              self.S(modal).foundation('section', 'reflow');
-              self.S(modal).children().foundation();
-
-              if (open_modal.length > 0) {
-                if (settings.multiple_opened) {
-                  self.to_back(open_modal);
-                } else {
-                  self.hide(open_modal, settings.css.close);
-                }
-              }
-              self.show(modal, settings.css.open);
-            }
-          });
-
-          // check for if user initalized with error callback
-          if (settings.on_ajax_error !== $.noop) {
-            $.extend(ajax_settings, {
-              error : settings.on_ajax_error
-            });
-          }
-
-          $.ajax(ajax_settings);
-        }
-      }
-      self.S(window).trigger('resize');
-    },
-
-    close : function (modal) {
-      var modal = modal && modal.length ? modal : this.S(this.scope),
-          open_modals = this.S('[' + this.attr_name() + '].open'),
-          settings = modal.data(this.attr_name(true) + '-init') || this.settings,
-          self = this;
-
-      if (open_modals.length > 0) {
-
-        modal.removeAttr('tabindex','0').attr('aria-hidden','true');
-
-        this.locked = true;
-        this.key_up_off(modal);   // PATCH #3: turning on key up capture only when a reveal window is open
-
-        modal.trigger('close.fndtn.reveal');
-
-        if ((settings.multiple_opened && open_modals.length === 1) || !settings.multiple_opened || modal.length > 1) {
-          self.toggle_bg(modal, false);
-          self.to_front(modal);
-        }
-
-        if (settings.multiple_opened) {
-          self.hide(modal, settings.css.close, settings);
-          self.to_front($($.makeArray(open_modals).reverse()[1]));
-        } else {
-          self.hide(open_modals, settings.css.close, settings);
-        }
-      }
-    },
-
-    close_targets : function () {
-      var base = '.' + this.settings.dismiss_modal_class;
-
-      if (this.settings.close_on_background_click) {
-        return base + ', .' + this.settings.bg_class;
-      }
-
-      return base;
-    },
-
-    toggle_bg : function (modal, state) {
-      if (this.S('.' + this.settings.bg_class).length === 0) {
-        this.settings.bg = $('<div />', {'class': this.settings.bg_class})
-          .appendTo('body').hide();
-      }
-
-      var visible = this.settings.bg.filter(':visible').length > 0;
-      if ( state != visible ) {
-        if ( state == undefined ? visible : !state ) {
-          this.hide(this.settings.bg);
-        } else {
-          this.show(this.settings.bg);
-        }
-      }
-    },
-
-    show : function (el, css) {
-      // is modal
-      if (css) {
-        var settings = el.data(this.attr_name(true) + '-init') || this.settings,
-            root_element = settings.root_element,
-            context = this;
-
-        if (el.parent(root_element).length === 0) {
-          var placeholder = el.wrap('<div style="display: none;" />').parent();
-
-          el.on('closed.fndtn.reveal.wrapped', function () {
-            el.detach().appendTo(placeholder);
-            el.unwrap().unbind('closed.fndtn.reveal.wrapped');
-          });
-
-          el.detach().appendTo(root_element);
-        }
-
-        var animData = getAnimationData(settings.animation);
-        if (!animData.animate) {
-          this.locked = false;
-        }
-        if (animData.pop) {
-          css.top = $(window).scrollTop() - el.data('offset') + 'px';
-          var end_css = {
-            top: $(window).scrollTop() + el.data('css-top') + 'px',
-            opacity: 1
-          };
-
-          return setTimeout(function () {
-            return el
-              .css(css)
-              .animate(end_css, settings.animation_speed, 'linear', function () {
-                context.locked = false;
-                el.trigger('opened.fndtn.reveal');
-              })
-              .addClass('open');
-          }, settings.animation_speed / 2);
-        }
-
-        if (animData.fade) {
-          css.top = $(window).scrollTop() + el.data('css-top') + 'px';
-          var end_css = {opacity: 1};
-
-          return setTimeout(function () {
-            return el
-              .css(css)
-              .animate(end_css, settings.animation_speed, 'linear', function () {
-                context.locked = false;
-                el.trigger('opened.fndtn.reveal');
-              })
-              .addClass('open');
-          }, settings.animation_speed / 2);
-        }
-
-        return el.css(css).show().css({opacity : 1}).addClass('open').trigger('opened.fndtn.reveal');
-      }
-
-      var settings = this.settings;
-
-      // should we animate the background?
-      if (getAnimationData(settings.animation).fade) {
-        return el.fadeIn(settings.animation_speed / 2);
-      }
-
-      this.locked = false;
-
-      return el.show();
-    },
-
-    to_back : function(el) {
-      el.addClass('toback');
-    },
-
-    to_front : function(el) {
-      el.removeClass('toback');
-    },
-
-    hide : function (el, css) {
-      // is modal
-      if (css) {
-        var settings = el.data(this.attr_name(true) + '-init'),
-            context = this;
-        settings = settings || this.settings;
-
-        var animData = getAnimationData(settings.animation);
-        if (!animData.animate) {
-          this.locked = false;
-        }
-        if (animData.pop) {
-          var end_css = {
-            top: - $(window).scrollTop() - el.data('offset') + 'px',
-            opacity: 0
-          };
-
-          return setTimeout(function () {
-            return el
-              .animate(end_css, settings.animation_speed, 'linear', function () {
-                context.locked = false;
-                el.css(css).trigger('closed.fndtn.reveal');
-              })
-              .removeClass('open');
-          }, settings.animation_speed / 2);
-        }
-
-        if (animData.fade) {
-          var end_css = {opacity : 0};
-
-          return setTimeout(function () {
-            return el
-              .animate(end_css, settings.animation_speed, 'linear', function () {
-                context.locked = false;
-                el.css(css).trigger('closed.fndtn.reveal');
-              })
-              .removeClass('open');
-          }, settings.animation_speed / 2);
-        }
-
-        return el.hide().css(css).removeClass('open').trigger('closed.fndtn.reveal');
-      }
-
-      var settings = this.settings;
-
-      // should we animate the background?
-      if (getAnimationData(settings.animation).fade) {
-        return el.fadeOut(settings.animation_speed / 2);
-      }
-
-      return el.hide();
-    },
-
-    close_video : function (e) {
-      var video = $('.flex-video', e.target),
-          iframe = $('iframe', video);
-
-      if (iframe.length > 0) {
-        iframe.attr('data-src', iframe[0].src);
-        iframe.attr('src', iframe.attr('src'));
-        video.hide();
-      }
-    },
-
-    open_video : function (e) {
-      var video = $('.flex-video', e.target),
-          iframe = video.find('iframe');
-
-      if (iframe.length > 0) {
-        var data_src = iframe.attr('data-src');
-        if (typeof data_src === 'string') {
-          iframe[0].src = iframe.attr('data-src');
-        } else {
-          var src = iframe[0].src;
-          iframe[0].src = undefined;
-          iframe[0].src = src;
-        }
-        video.show();
-      }
-    },
-
-    data_attr : function (str) {
-      if (this.namespace.length > 0) {
-        return this.namespace + '-' + str;
-      }
-
-      return str;
-    },
-
-    cache_offset : function (modal) {
-      var offset = modal.show().height() + parseInt(modal.css('top'), 10) + modal.scrollY;
-
-      modal.hide();
-
-      return offset;
-    },
-
-    off : function () {
-      $(this.scope).off('.fndtn.reveal');
-    },
-
-    reflow : function () {}
-  };
-
-  /*
-   * getAnimationData('popAndFade') // {animate: true,  pop: true,  fade: true}
-   * getAnimationData('fade')       // {animate: true,  pop: false, fade: true}
-   * getAnimationData('pop')        // {animate: true,  pop: true,  fade: false}
-   * getAnimationData('foo')        // {animate: false, pop: false, fade: false}
-   * getAnimationData(null)         // {animate: false, pop: false, fade: false}
-   */
-  function getAnimationData(str) {
-    var fade = /fade/i.test(str);
-    var pop = /pop/i.test(str);
-    return {
-      animate : fade || pop,
-      pop : pop,
-      fade : fade
-    };
   }
-}(jQuery, window, window.document));
-;;(function ($, window, document, undefined) {
-  'use strict';
 
-  Foundation.libs.slider = {
-    name : 'slider',
-
-    version : '5.5.2',
-
-    settings : {
-      start : 0,
-      end : 100,
-      step : 1,
-      precision : null,
-      initial : null,
-      display_selector : '',
-      vertical : false,
-      trigger_input_change : false,
-      on_change : function () {}
-    },
-
-    cache : {},
-
-    init : function (scope, method, options) {
-      Foundation.inherit(this, 'throttle');
-      this.bindings(method, options);
-      this.reflow();
-    },
-
-    events : function () {
-      var self = this;
-
-      $(this.scope)
-        .off('.slider')
-        .on('mousedown.fndtn.slider touchstart.fndtn.slider pointerdown.fndtn.slider',
-        '[' + self.attr_name() + ']:not(.disabled, [disabled]) .range-slider-handle', function (e) {
-          if (!self.cache.active) {
-            e.preventDefault();
-            self.set_active_slider($(e.target));
-          }
-        })
-        .on('mousemove.fndtn.slider touchmove.fndtn.slider pointermove.fndtn.slider', function (e) {
-          if (!!self.cache.active) {
-            e.preventDefault();
-            if ($.data(self.cache.active[0], 'settings').vertical) {
-              var scroll_offset = 0;
-              if (!e.pageY) {
-                scroll_offset = window.scrollY;
-              }
-              self.calculate_position(self.cache.active, self.get_cursor_position(e, 'y') + scroll_offset);
-            } else {
-              self.calculate_position(self.cache.active, self.get_cursor_position(e, 'x'));
-            }
-          }
-        })
-        .on('mouseup.fndtn.slider touchend.fndtn.slider pointerup.fndtn.slider', function (e) {
-          self.remove_active_slider();
-        })
-        .on('change.fndtn.slider', function (e) {
-          self.settings.on_change();
-        });
-
-      self.S(window)
-        .on('resize.fndtn.slider', self.throttle(function (e) {
-          self.reflow();
-        }, 300));
-
-      // update slider value as users change input value
-      this.S('[' + this.attr_name() + ']').each(function () {
-        var slider = $(this),
-            handle = slider.children('.range-slider-handle')[0],
-            settings = self.initialize_settings(handle);
-
-        if (settings.display_selector != '') {
-          $(settings.display_selector).each(function(){
-            if (this.hasOwnProperty('value')) {
-              $(this).change(function(){
-                // is there a better way to do this?
-                slider.foundation("slider", "set_value", $(this).val());
-              });
-            }
-          });
-        }
-      });
-    },
-
-    get_cursor_position : function (e, xy) {
-      var pageXY = 'page' + xy.toUpperCase(),
-          clientXY = 'client' + xy.toUpperCase(),
-          position;
-
-      if (typeof e[pageXY] !== 'undefined') {
-        position = e[pageXY];
-      } else if (typeof e.originalEvent[clientXY] !== 'undefined') {
-        position = e.originalEvent[clientXY];
-      } else if (e.originalEvent.touches && e.originalEvent.touches[0] && typeof e.originalEvent.touches[0][clientXY] !== 'undefined') {
-        position = e.originalEvent.touches[0][clientXY];
-      } else if (e.currentPoint && typeof e.currentPoint[xy] !== 'undefined') {
-        position = e.currentPoint[xy];
-      }
-
-      return position;
-    },
-
-    set_active_slider : function ($handle) {
-      this.cache.active = $handle;
-    },
-
-    remove_active_slider : function () {
-      this.cache.active = null;
-    },
-
-    calculate_position : function ($handle, cursor_x) {
-      var self = this,
-          settings = $.data($handle[0], 'settings'),
-          handle_l = $.data($handle[0], 'handle_l'),
-          handle_o = $.data($handle[0], 'handle_o'),
-          bar_l = $.data($handle[0], 'bar_l'),
-          bar_o = $.data($handle[0], 'bar_o');
-
-      requestAnimationFrame(function () {
-        var pct;
-
-        if (Foundation.rtl && !settings.vertical) {
-          pct = self.limit_to(((bar_o + bar_l - cursor_x) / bar_l), 0, 1);
-        } else {
-          pct = self.limit_to(((cursor_x - bar_o) / bar_l), 0, 1);
-        }
-
-        pct = settings.vertical ? 1 - pct : pct;
-
-        var norm = self.normalized_value(pct, settings.start, settings.end, settings.step, settings.precision);
-
-        self.set_ui($handle, norm);
-      });
-    },
-
-    set_ui : function ($handle, value) {
-      var settings = $.data($handle[0], 'settings'),
-          handle_l = $.data($handle[0], 'handle_l'),
-          bar_l = $.data($handle[0], 'bar_l'),
-          norm_pct = this.normalized_percentage(value, settings.start, settings.end),
-          handle_offset = norm_pct * (bar_l - handle_l) - 1,
-          progress_bar_length = norm_pct * 100,
-          $handle_parent = $handle.parent(),
-          $hidden_inputs = $handle.parent().children('input[type=hidden]');
-
-      if (Foundation.rtl && !settings.vertical) {
-        handle_offset = -handle_offset;
-      }
-
-      handle_offset = settings.vertical ? -handle_offset + bar_l - handle_l + 1 : handle_offset;
-      this.set_translate($handle, handle_offset, settings.vertical);
-
-      if (settings.vertical) {
-        $handle.siblings('.range-slider-active-segment').css('height', progress_bar_length + '%');
-      } else {
-        $handle.siblings('.range-slider-active-segment').css('width', progress_bar_length + '%');
-      }
-
-      $handle_parent.attr(this.attr_name(), value).trigger('change.fndtn.slider');
-
-      $hidden_inputs.val(value);
-      if (settings.trigger_input_change) {
-          $hidden_inputs.trigger('change.fndtn.slider');
-      }
-
-      if (!$handle[0].hasAttribute('aria-valuemin')) {
-        $handle.attr({
-          'aria-valuemin' : settings.start,
-          'aria-valuemax' : settings.end
-        });
-      }
-      $handle.attr('aria-valuenow', value);
-
-      if (settings.display_selector != '') {
-        $(settings.display_selector).each(function () {
-          if (this.hasAttribute('value')) {
-            $(this).val(value);
-          } else {
-            $(this).text(value);
-          }
-        });
-      }
-
-    },
-
-    normalized_percentage : function (val, start, end) {
-      return Math.min(1, (val - start) / (end - start));
-    },
-
-    normalized_value : function (val, start, end, step, precision) {
-      var range = end - start,
-          point = val * range,
-          mod = (point - (point % step)) / step,
-          rem = point % step,
-          round = ( rem >= step * 0.5 ? step : 0);
-      return ((mod * step + round) + start).toFixed(precision);
-    },
-
-    set_translate : function (ele, offset, vertical) {
-      if (vertical) {
-        $(ele)
-          .css('-webkit-transform', 'translateY(' + offset + 'px)')
-          .css('-moz-transform', 'translateY(' + offset + 'px)')
-          .css('-ms-transform', 'translateY(' + offset + 'px)')
-          .css('-o-transform', 'translateY(' + offset + 'px)')
-          .css('transform', 'translateY(' + offset + 'px)');
-      } else {
-        $(ele)
-          .css('-webkit-transform', 'translateX(' + offset + 'px)')
-          .css('-moz-transform', 'translateX(' + offset + 'px)')
-          .css('-ms-transform', 'translateX(' + offset + 'px)')
-          .css('-o-transform', 'translateX(' + offset + 'px)')
-          .css('transform', 'translateX(' + offset + 'px)');
-      }
-    },
-
-    limit_to : function (val, min, max) {
-      return Math.min(Math.max(val, min), max);
-    },
-
-    initialize_settings : function (handle) {
-      var settings = $.extend({}, this.settings, this.data_options($(handle).parent())),
-          decimal_places_match_result;
-
-      if (settings.precision === null) {
-        decimal_places_match_result = ('' + settings.step).match(/\.([\d]*)/);
-        settings.precision = decimal_places_match_result && decimal_places_match_result[1] ? decimal_places_match_result[1].length : 0;
-      }
-
-      if (settings.vertical) {
-        $.data(handle, 'bar_o', $(handle).parent().offset().top);
-        $.data(handle, 'bar_l', $(handle).parent().outerHeight());
-        $.data(handle, 'handle_o', $(handle).offset().top);
-        $.data(handle, 'handle_l', $(handle).outerHeight());
-      } else {
-        $.data(handle, 'bar_o', $(handle).parent().offset().left);
-        $.data(handle, 'bar_l', $(handle).parent().outerWidth());
-        $.data(handle, 'handle_o', $(handle).offset().left);
-        $.data(handle, 'handle_l', $(handle).outerWidth());
-      }
-
-      $.data(handle, 'bar', $(handle).parent());
-      return $.data(handle, 'settings', settings);
-    },
-
-    set_initial_position : function ($ele) {
-      var settings = $.data($ele.children('.range-slider-handle')[0], 'settings'),
-          initial = ((typeof settings.initial == 'number' && !isNaN(settings.initial)) ? settings.initial : Math.floor((settings.end - settings.start) * 0.5 / settings.step) * settings.step + settings.start),
-          $handle = $ele.children('.range-slider-handle');
-      this.set_ui($handle, initial);
-    },
-
-    set_value : function (value) {
-      var self = this;
-      $('[' + self.attr_name() + ']', this.scope).each(function () {
-        $(this).attr(self.attr_name(), value);
-      });
-      if (!!$(this.scope).attr(self.attr_name())) {
-        $(this.scope).attr(self.attr_name(), value);
-      }
-      self.reflow();
-    },
-
-    reflow : function () {
-      var self = this;
-      self.S('[' + this.attr_name() + ']').each(function () {
-        var handle = $(this).children('.range-slider-handle')[0],
-            val = $(this).attr(self.attr_name());
-        self.initialize_settings(handle);
-
-        if (val) {
-          self.set_ui($(handle), parseFloat(val));
-        } else {
-          self.set_initial_position($(this));
-        }
-      });
+  /**
+   * Allows user to be alerted to any upgrades that are performed for a given
+   * component type
+   * @param {string} jsClass The class name of the component we wish
+   * to hook into for any upgrades performed.
+   * @param {!Function} callback The function to call upon an upgrade. This
+   * function should expect 1 parameter - the HTMLElement which got upgraded.
+   */
+  function registerUpgradedCallbackInternal(jsClass, callback) {
+    var regClass = findRegisteredClass_(jsClass);
+    if (regClass) {
+      regClass.callbacks.push(callback);
     }
-  };
+  }
 
-}(jQuery, window, window.document));
-;;(function ($, window, document, undefined) {
+  /**
+   * Upgrades all registered components found in the current DOM. This is
+   * automatically called on window load.
+   */
+  function upgradeAllRegisteredInternal() {
+    for (var n = 0; n < registeredComponents_.length; n++) {
+      upgradeDomInternal(registeredComponents_[n].className);
+    }
+  }
+
+  /**
+   * Finds a created component by a given DOM node.
+   *
+   * @param {!Element} node
+   * @return {*}
+   */
+  function findCreatedComponentByNodeInternal(node) {
+    for (var n = 0; n < createdComponents_.length; n++) {
+      var component = createdComponents_[n];
+      if (component.element_ === node) {
+        return component;
+      }
+    }
+  }
+
+  /**
+   * Check the component for the downgrade method.
+   * Execute if found.
+   * Remove component from createdComponents list.
+   *
+   * @param {*} component
+   */
+  function deconstructComponentInternal(component) {
+    if (component &&
+        component[componentConfigProperty_]
+          .classConstructor.prototype
+          .hasOwnProperty(downgradeMethod_)) {
+      component[downgradeMethod_]();
+      var componentIndex = createdComponents_.indexOf(component);
+      createdComponents_.splice(componentIndex, 1);
+
+      var upgrades = component.element_.getAttribute('data-upgraded').split(',');
+      var componentPlace = upgrades.indexOf(
+          component[componentConfigProperty_].classAsString);
+      upgrades.splice(componentPlace, 1);
+      component.element_.setAttribute('data-upgraded', upgrades.join(','));
+
+      var ev = document.createEvent('Events');
+      ev.initEvent('componentdowngraded', true, true);
+      component.element_.dispatchEvent(ev);
+    }
+  }
+
+  /**
+   * Downgrade either a given node, an array of nodes, or a NodeList.
+   *
+   * @param {*} nodes
+   */
+  function downgradeNodesInternal(nodes) {
+    var downgradeNode = function(node) {
+      deconstructComponentInternal(findCreatedComponentByNodeInternal(node));
+    };
+    if (nodes instanceof Array || nodes instanceof NodeList) {
+      for (var n = 0; n < nodes.length; n++) {
+        downgradeNode(nodes[n]);
+      }
+    } else if (nodes instanceof Node) {
+      downgradeNode(nodes);
+    } else {
+      throw new Error('Invalid argument provided to downgrade nodes.');
+    }
+  }
+
+  // Now return the functions that should be made public with their publicly
+  // facing names...
+  return {
+    upgradeDom: upgradeDomInternal,
+    upgradeElement: upgradeElementInternal,
+    upgradeElements: upgradeElementsInternal,
+    upgradeAllRegistered: upgradeAllRegisteredInternal,
+    registerUpgradedCallback: registerUpgradedCallbackInternal,
+    register: registerInternal,
+    downgradeElements: downgradeNodesInternal
+  };
+})();
+
+window.addEventListener('load', function() {
   'use strict';
 
-  Foundation.libs.tab = {
-    name : 'tab',
+  /**
+   * Performs a "Cutting the mustard" test. If the browser supports the features
+   * tested, adds a js class to the <html> element. It then upgrades all MDL
+   * components requiring JavaScript.
+   */
+  if ('classList' in document.createElement('div') &&
+      'querySelector' in document &&
+      'addEventListener' in window && Array.prototype.forEach) {
+    document.documentElement.classList.add('js');
+    componentHandler.upgradeAllRegistered();
+  } else {
+    componentHandler.upgradeElement =
+        componentHandler.register = function() {};
+  }
+});
 
-    version : '5.5.2',
+// Source: https://github.com/darius/requestAnimationFrame/blob/master/requestAnimationFrame.js
+// Adapted from https://gist.github.com/paulirish/1579671 which derived from
+// http://paulirish.com/2011/requestanimationframe-for-smart-animating/
+// http://my.opera.com/emoller/blog/2011/12/20/requestanimationframe-for-smart-er-animating
 
-    settings : {
-      active_class : 'active',
-      callback : function () {},
-      deep_linking : false,
-      scroll_to_content : true,
-      is_hover : false
-    },
+// requestAnimationFrame polyfill by Erik Möller.
+// Fixes from Paul Irish, Tino Zijdel, Andrew Mao, Klemen Slavič, Darius Bacon
 
-    default_tab_hashes : [],
+// MIT license
 
-    init : function (scope, method, options) {
-      var self = this,
-          S = this.S;
+(function() {
+'use strict';
 
-	  // Store the default active tabs which will be referenced when the
-	  // location hash is absent, as in the case of navigating the tabs and
-	  // returning to the first viewing via the browser Back button.
-	  S('[' + this.attr_name() + '] > .active > a', this.scope).each(function () {
-	    self.default_tab_hashes.push(this.hash);
-	  });
+if (!Date.now) {
+  Date.now = function() { return new Date().getTime(); };
+}
 
-      // store the initial href, which is used to allow correct behaviour of the
-      // browser back button when deep linking is turned on.
-      self.entry_location = window.location.href;
+var vendors = ['webkit', 'moz'];
+for (var i = 0; i < vendors.length && !window.requestAnimationFrame; ++i) {
+  var vp = vendors[i];
+  window.requestAnimationFrame = window[vp + 'RequestAnimationFrame'];
+  window.cancelAnimationFrame = (window[vp + 'CancelAnimationFrame'] ||
+  window[vp + 'CancelRequestAnimationFrame']);
+}
 
-      this.bindings(method, options);
-      this.handle_location_hash_change();
-    },
+if (/iP(ad|hone|od).*OS 6/.test(window.navigator.userAgent) || !window.requestAnimationFrame || !window.cancelAnimationFrame) {
+  var lastTime = 0;
+  window.requestAnimationFrame = function(callback) {
+      var now = Date.now();
+      var nextTime = Math.max(lastTime + 16, now);
+      return setTimeout(function() { callback(lastTime = nextTime); },
+                        nextTime - now);
+    };
+  window.cancelAnimationFrame = clearTimeout;
+}
 
-    events : function () {
-      var self = this,
-          S = this.S;
+})();
 
-      var usual_tab_behavior =  function (e, target) {
-          var settings = S(target).closest('[' + self.attr_name() + ']').data(self.attr_name(true) + '-init');
-          if (!settings.is_hover || Modernizr.touch) {
-            e.preventDefault();
-            e.stopPropagation();
-            self.toggle_active_tab(S(target).parent());
-          }
-        };
 
-      S(this.scope)
-        .off('.tab')
-        // Key event: focus/tab key
-        .on('keydown.fndtn.tab', '[' + this.attr_name() + '] > * > a', function(e) {
-          var el = this;
-          var keyCode = e.keyCode || e.which;
-            // if user pressed tab key
-            if (keyCode == 9) { 
-              e.preventDefault();
-              // TODO: Change usual_tab_behavior into accessibility function?
-              usual_tab_behavior(e, el);
-            } 
-        })
-        // Click event: tab title
-        .on('click.fndtn.tab', '[' + this.attr_name() + '] > * > a', function(e) {
-          var el = this;
-          usual_tab_behavior(e, el);
-        })
-        // Hover event: tab title
-        .on('mouseenter.fndtn.tab', '[' + this.attr_name() + '] > * > a', function (e) {
-          var settings = S(this).closest('[' + self.attr_name() + ']').data(self.attr_name(true) + '-init');
-          if (settings.is_hover) {
-            self.toggle_active_tab(S(this).parent());
-          }
-        });
+/**
+ * @license
+ * Copyright 2015 failcoder Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-      // Location hash change event
-      S(window).on('hashchange.fndtn.tab', function (e) {
-        e.preventDefault();
-        self.handle_location_hash_change();
-      });
-    },
-
-    handle_location_hash_change : function () {
-
-      var self = this,
-          S = this.S;
-
-      S('[' + this.attr_name() + ']', this.scope).each(function () {
-        var settings = S(this).data(self.attr_name(true) + '-init');
-        if (settings.deep_linking) {
-          // Match the location hash to a label
-          var hash;
-          if (settings.scroll_to_content) {
-            hash = self.scope.location.hash;
-          } else {
-            // prefix the hash to prevent anchor scrolling
-            hash = self.scope.location.hash.replace('fndtn-', '');
-          }
-          if (hash != '') {
-            // Check whether the location hash references a tab content div or
-            // another element on the page (inside or outside the tab content div)
-            var hash_element = S(hash);
-            if (hash_element.hasClass('content') && hash_element.parent().hasClass('tabs-content')) {
-              // Tab content div
-              self.toggle_active_tab($('[' + self.attr_name() + '] > * > a[href=' + hash + ']').parent());
-            } else {
-              // Not the tab content div. If inside the tab content, find the
-              // containing tab and toggle it as active.
-              var hash_tab_container_id = hash_element.closest('.content').attr('id');
-              if (hash_tab_container_id != undefined) {
-                self.toggle_active_tab($('[' + self.attr_name() + '] > * > a[href=#' + hash_tab_container_id + ']').parent(), hash);
-              }
-            }
-          } else {
-            // Reference the default tab hashes which were initialized in the init function
-            for (var ind = 0; ind < self.default_tab_hashes.length; ind++) {
-              self.toggle_active_tab($('[' + self.attr_name() + '] > * > a[href=' + self.default_tab_hashes[ind] + ']').parent());
-            }
-          }
-        }
-       });
-     },
-
-    toggle_active_tab : function (tab, location_hash) {
-      var self = this,
-          S = self.S,
-          tabs = tab.closest('[' + this.attr_name() + ']'),
-          tab_link = tab.find('a'),
-          anchor = tab.children('a').first(),
-          target_hash = '#' + anchor.attr('href').split('#')[1],
-          target = S(target_hash),
-          siblings = tab.siblings(),
-          settings = tabs.data(this.attr_name(true) + '-init'),
-          interpret_keyup_action = function (e) {
-            // Light modification of Heydon Pickering's Practical ARIA Examples: http://heydonworks.com/practical_aria_examples/js/a11y.js
-
-            // define current, previous and next (possible) tabs
-
-            var $original = $(this);
-            var $prev = $(this).parents('li').prev().children('[role="tab"]');
-            var $next = $(this).parents('li').next().children('[role="tab"]');
-            var $target;
-
-            // find the direction (prev or next)
-
-            switch (e.keyCode) {
-              case 37:
-                $target = $prev;
-                break;
-              case 39:
-                $target = $next;
-                break;
-              default:
-                $target = false
-                  break;
-            }
-
-            if ($target.length) {
-              $original.attr({
-                'tabindex' : '-1',
-                'aria-selected' : null
-              });
-              $target.attr({
-                'tabindex' : '0',
-                'aria-selected' : true
-              }).focus();
-            }
-
-            // Hide panels
-
-            $('[role="tabpanel"]')
-              .attr('aria-hidden', 'true');
-
-            // Show panel which corresponds to target
-
-            $('#' + $(document.activeElement).attr('href').substring(1))
-              .attr('aria-hidden', null);
-
-          },
-          go_to_hash = function(hash) {
-            // This function allows correct behaviour of the browser's back button when deep linking is enabled. Without it
-            // the user would get continually redirected to the default hash.
-            var is_entry_location = window.location.href === self.entry_location,
-                default_hash = settings.scroll_to_content ? self.default_tab_hashes[0] : is_entry_location ? window.location.hash :'fndtn-' + self.default_tab_hashes[0].replace('#', '')
-
-            if (!(is_entry_location && hash === default_hash)) {
-              window.location.hash = hash;
-            }
-          };
-
-      // allow usage of data-tab-content attribute instead of href
-      if (anchor.data('tab-content')) {
-        target_hash = '#' + anchor.data('tab-content').split('#')[1];
-        target = S(target_hash);
-      }
-
-      if (settings.deep_linking) {
-
-        if (settings.scroll_to_content) {
-
-          // retain current hash to scroll to content
-          go_to_hash(location_hash || target_hash);
-
-          if (location_hash == undefined || location_hash == target_hash) {
-            tab.parent()[0].scrollIntoView();
-          } else {
-            S(target_hash)[0].scrollIntoView();
-          }
-        } else {
-          // prefix the hashes so that the browser doesn't scroll down
-          if (location_hash != undefined) {
-            go_to_hash('fndtn-' + location_hash.replace('#', ''));
-          } else {
-            go_to_hash('fndtn-' + target_hash.replace('#', ''));
-          }
-        }
-      }
-
-      // WARNING: The activation and deactivation of the tab content must
-      // occur after the deep linking in order to properly refresh the browser
-      // window (notably in Chrome).
-      // Clean up multiple attr instances to done once
-      tab.addClass(settings.active_class).triggerHandler('opened');
-      tab_link.attr({'aria-selected' : 'true',  tabindex : 0});
-      siblings.removeClass(settings.active_class)
-      siblings.find('a').attr({'aria-selected' : 'false',  tabindex : -1});
-      target.siblings().removeClass(settings.active_class).attr({'aria-hidden' : 'true',  tabindex : -1});
-      target.addClass(settings.active_class).attr('aria-hidden', 'false').removeAttr('tabindex');
-      settings.callback(tab);
-      target.triggerHandler('toggled', [target]);
-      tabs.triggerHandler('toggled', [tab]);
-
-      tab_link.off('keydown').on('keydown', interpret_keyup_action );
-    },
-
-    data_attr : function (str) {
-      if (this.namespace.length > 0) {
-        return this.namespace + '-' + str;
-      }
-
-      return str;
-    },
-
-    off : function () {},
-
-    reflow : function () {}
-  };
-}(jQuery, window, window.document));
-;;(function ($, window, document, undefined) {
+/**
+ * Class constructor for Button component.
+ * Implements component design pattern defined at:
+ * https://github.com/jasonmayes/component-design-pattern
+ * @param {HTMLElement} element The element that will be upgraded.
+ */
+function ffButton(element) {
   'use strict';
 
-  Foundation.libs.tooltip = {
-    name : 'tooltip',
+  this.element_ = element;
 
-    version : '5.5.2',
+  // Initialize instance.
+  this.init();
+}
 
-    settings : {
-      additional_inheritable_classes : [],
-      tooltip_class : '.tooltip',
-      append_to : 'body',
-      touch_close_text : 'Tap To Close',
-      disable_for_touch : false,
-      hover_delay : 200,
-      show_on : 'all',
-      tip_template : function (selector, content) {
-        return '<span data-selector="' + selector + '" id="' + selector + '" class="'
-          + Foundation.libs.tooltip.settings.tooltip_class.substring(1)
-          + '" role="tooltip">' + content + '<span class="nub"></span></span>';
+/**
+ * Store constants in one place so they can be updated easily.
+ * @enum {string | number}
+ * @private
+ */
+ffButton.prototype.Constant_ = {
+  // None for now.
+};
+
+/**
+ * Store strings for class names defined by this component that are used in
+ * JavaScript. This allows us to simply change it in one place should we
+ * decide to modify at a later date.
+ * @enum {string}
+ * @private
+ */
+ffButton.prototype.CssClasses_ = {
+  RIPPLE_EFFECT: 'js-ripple-effect',
+  RIPPLE_CONTAINER: 'button-ripple',
+  RIPPLE: 'ripple'
+};
+
+/**
+ * Handle blur of element.
+ * @param {HTMLElement} element The instance of a button we want to blur.
+ * @private
+ */
+ffButton.prototype.blurHandler = function(event) {
+  'use strict';
+
+  if (event) {
+    this.element_.blur();
+  }
+};
+
+// Public methods.
+
+/**
+ * Disable button.
+ * @public
+ */
+ffButton.prototype.disable = function() {
+  'use strict';
+
+  this.element_.disabled = true;
+};
+
+/**
+ * Enable button.
+ * @public
+ */
+ffButton.prototype.enable = function() {
+  'use strict';
+
+  this.element_.disabled = false;
+};
+
+/**
+ * Initialize element.
+ */
+ffButton.prototype.init = function() {
+  'use strict';
+
+  if (this.element_) {
+    if (this.element_.classList.contains(this.CssClasses_.RIPPLE_EFFECT)) {
+      var rippleContainer = document.createElement('span');
+      rippleContainer.classList.add(this.CssClasses_.RIPPLE_CONTAINER);
+      this.rippleElement_ = document.createElement('span');
+      this.rippleElement_.classList.add(this.CssClasses_.RIPPLE);
+      rippleContainer.appendChild(this.rippleElement_);
+      this.boundRippleBlurHandler = this.blurHandler.bind(this);
+      this.rippleElement_.addEventListener('mouseup', this.boundRippleBlurHandler);
+      this.element_.appendChild(rippleContainer);
+    }
+    this.boundButtonBlurHandler = this.blurHandler.bind(this);
+    this.element_.addEventListener('mouseup', this.boundButtonBlurHandler);
+    this.element_.addEventListener('mouseleave', this.boundButtonBlurHandler);
+  }
+};
+
+/**
+ * Downgrade the element.
+ */
+ffButton.prototype.coreDowngrade_ = function() {
+  'use strict';
+  if (this.rippleElement_) {
+    this.rippleElement_.removeEventListener('mouseup', this.boundRippleBlurHandler);
+  }
+  this.element_.removeEventListener('mouseup', this.boundButtonBlurHandler);
+  this.element_.removeEventListener('mouseleave', this.boundButtonBlurHandler);
+};
+
+// The component registers itself. It can assume componentHandler is available
+// in the global scope.
+componentHandler.register({
+  constructor: ffButton,
+  classAsString: 'ffButton',
+  cssClass: 'js-button',
+  widget: true
+});
+
+/**
+ * @license
+ * Copyright 2015 failcoder Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Class constructor for Checkbox component.
+ * Implements component design pattern defined at:
+ * https://github.com/jasonmayes/component-design-pattern
+ * @param {HTMLElement} element The element that will be upgraded.
+ */
+function ffCheckbox(element) {
+  'use strict';
+
+  this.element_ = element;
+
+  // Initialize instance.
+  this.init();
+}
+
+/**
+ * Store constants in one place so they can be updated easily.
+ * @enum {string | number}
+ * @private
+ */
+ffCheckbox.prototype.Constant_ = {
+  TINY_TIMEOUT: 0.001
+};
+
+/**
+ * Store strings for class names defined by this component that are used in
+ * JavaScript. This allows us to simply change it in one place should we
+ * decide to modify at a later date.
+ * @enum {string}
+ * @private
+ */
+ffCheckbox.prototype.CssClasses_ = {
+  INPUT: 'checkbox-input',
+  BOX_OUTLINE: 'checkbox-box-outline',
+  FOCUS_HELPER: 'checkbox-focus-helper',
+  TICK_OUTLINE: 'checkbox-tick-outline',
+  RIPPLE_EFFECT: 'js-ripple-effect',
+  RIPPLE_IGNORE_EVENTS: 'js-ripple-effect--ignore-events',
+  RIPPLE_CONTAINER: 'checkbox-ripple',
+  RIPPLE_CENTER: 'ripple--center',
+  RIPPLE: 'ripple',
+  IS_FOCUSED: 'is-focused',
+  IS_DISABLED: 'is-disabled',
+  IS_CHECKED: 'is-checked',
+  IS_UPGRADED: 'is-upgraded'
+};
+
+/**
+ * Handle change of state.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffCheckbox.prototype.onChange_ = function(event) {
+  'use strict';
+
+  this.updateClasses_();
+};
+
+/**
+ * Handle focus of element.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffCheckbox.prototype.onFocus_ = function(event) {
+  'use strict';
+
+  this.element_.classList.add(this.CssClasses_.IS_FOCUSED);
+};
+
+/**
+ * Handle lost focus of element.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffCheckbox.prototype.onBlur_ = function(event) {
+  'use strict';
+
+  this.element_.classList.remove(this.CssClasses_.IS_FOCUSED);
+};
+
+/**
+ * Handle mouseup.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffCheckbox.prototype.onMouseUp_ = function(event) {
+  'use strict';
+
+  this.blur_();
+};
+
+/**
+ * Handle class updates.
+ * @param {HTMLElement} button The button whose classes we should update.
+ * @param {HTMLElement} label The label whose classes we should update.
+ * @private
+ */
+ffCheckbox.prototype.updateClasses_ = function() {
+  'use strict';
+  this.checkDisabled();
+  this.checkToggleState();
+};
+
+/**
+ * Add blur.
+ * @private
+ */
+ffCheckbox.prototype.blur_ = function(event) {
+  'use strict';
+
+  // TODO: figure out why there's a focus event being fired after our blur,
+  // so that we can avoid this hack.
+  window.setTimeout(function() {
+    this.inputElement_.blur();
+  }.bind(this), this.Constant_.TINY_TIMEOUT);
+};
+
+// Public methods.
+
+/**
+* Check the inputs toggle state and update display.
+* @public
+*/
+ffCheckbox.prototype.checkToggleState = function() {
+  'use strict';
+  if (this.inputElement_.checked) {
+    this.element_.classList.add(this.CssClasses_.IS_CHECKED);
+  } else {
+    this.element_.classList.remove(this.CssClasses_.IS_CHECKED);
+  }
+};
+
+/**
+* Check the inputs disabled state and update display.
+* @public
+*/
+ffCheckbox.prototype.checkDisabled = function() {
+  'use strict';
+  if (this.inputElement_.disabled) {
+    this.element_.classList.add(this.CssClasses_.IS_DISABLED);
+  } else {
+    this.element_.classList.remove(this.CssClasses_.IS_DISABLED);
+  }
+};
+
+/**
+ * Disable checkbox.
+ * @public
+ */
+ffCheckbox.prototype.disable = function() {
+  'use strict';
+
+  this.inputElement_.disabled = true;
+  this.updateClasses_();
+};
+
+/**
+ * Enable checkbox.
+ * @public
+ */
+ffCheckbox.prototype.enable = function() {
+  'use strict';
+
+  this.inputElement_.disabled = false;
+  this.updateClasses_();
+};
+
+/**
+ * Check checkbox.
+ * @public
+ */
+ffCheckbox.prototype.check = function() {
+  'use strict';
+
+  this.inputElement_.checked = true;
+  this.updateClasses_();
+};
+
+/**
+ * Uncheck checkbox.
+ * @public
+ */
+ffCheckbox.prototype.uncheck = function() {
+  'use strict';
+
+  this.inputElement_.checked = false;
+  this.updateClasses_();
+};
+
+/**
+ * Initialize element.
+ */
+ffCheckbox.prototype.init = function() {
+  'use strict';
+
+  if (this.element_) {
+    this.inputElement_ = this.element_.querySelector('.' +
+        this.CssClasses_.INPUT);
+
+    var boxOutline = document.createElement('span');
+    boxOutline.classList.add(this.CssClasses_.BOX_OUTLINE);
+
+    var tickContainer = document.createElement('span');
+    tickContainer.classList.add(this.CssClasses_.FOCUS_HELPER);
+
+    var tickOutline = document.createElement('span');
+    tickOutline.classList.add(this.CssClasses_.TICK_OUTLINE);
+
+    boxOutline.appendChild(tickOutline);
+
+    this.element_.appendChild(tickContainer);
+    this.element_.appendChild(boxOutline);
+
+    if (this.element_.classList.contains(this.CssClasses_.RIPPLE_EFFECT)) {
+      this.element_.classList.add(this.CssClasses_.RIPPLE_IGNORE_EVENTS);
+      this.rippleContainerElement_ = document.createElement('span');
+      this.rippleContainerElement_.classList.add(this.CssClasses_.RIPPLE_CONTAINER);
+      this.rippleContainerElement_.classList.add(this.CssClasses_.RIPPLE_EFFECT);
+      this.rippleContainerElement_.classList.add(this.CssClasses_.RIPPLE_CENTER);
+      this.boundRippleMouseUp = this.onMouseUp_.bind(this);
+      this.rippleContainerElement_.addEventListener('mouseup', this.boundRippleMouseUp);
+
+      var ripple = document.createElement('span');
+      ripple.classList.add(this.CssClasses_.RIPPLE);
+
+      this.rippleContainerElement_.appendChild(ripple);
+      this.element_.appendChild(this.rippleContainerElement_);
+    }
+    this.boundInputOnChange = this.onChange_.bind(this);
+    this.boundInputOnFocus = this.onFocus_.bind(this);
+    this.boundInputOnBlur = this.onBlur_.bind(this);
+    this.boundElementMouseUp = this.onMouseUp_.bind(this);
+    this.inputElement_.addEventListener('change', this.boundInputOnChange);
+    this.inputElement_.addEventListener('focus', this.boundInputOnFocus);
+    this.inputElement_.addEventListener('blur', this.boundInputOnBlur);
+    this.element_.addEventListener('mouseup', this.boundElementMouseUp);
+
+    this.updateClasses_();
+    this.element_.classList.add(this.CssClasses_.IS_UPGRADED);
+  }
+};
+
+/*
+* Downgrade the component.
+*/
+ffCheckbox.prototype.coreDowngrade_ = function() {
+  'use strict';
+  if (this.rippleContainerElement_) {
+    this.rippleContainerElement_.removeEventListener('mouseup', this.boundRippleMouseUp);
+  }
+  this.inputElement_.removeEventListener('change', this.boundInputOnChange);
+  this.inputElement_.removeEventListener('focus', this.boundInputOnFocus);
+  this.inputElement_.removeEventListener('blur', this.boundInputOnBlur);
+  this.element_.removeEventListener('mouseup', this.boundElementMouseUp);
+};
+
+// The component registers itself. It can assume componentHandler is available
+// in the global scope.
+componentHandler.register({
+  constructor: ffCheckbox,
+  classAsString: 'ffCheckbox',
+  cssClass: 'js-checkbox',
+  widget: true
+});
+
+/**
+ * @license
+ * Copyright 2015 failcoder Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Class constructor for icon toggle component.
+ * Implements component design pattern defined at:
+ * https://github.com/jasonmayes/component-design-pattern
+ * @param {HTMLElement} element The element that will be upgraded.
+ */
+function ffIconToggle(element) {
+  'use strict';
+
+  this.element_ = element;
+
+  // Initialize instance.
+  this.init();
+}
+
+/**
+ * Store constants in one place so they can be updated easily.
+ * @enum {string | number}
+ * @private
+ */
+ffIconToggle.prototype.Constant_ = {
+  TINY_TIMEOUT: 0.001
+};
+
+/**
+ * Store strings for class names defined by this component that are used in
+ * JavaScript. This allows us to simply change it in one place should we
+ * decide to modify at a later date.
+ * @enum {string}
+ * @private
+ */
+ffIconToggle.prototype.CssClasses_ = {
+  INPUT: 'icon-input',
+  JS_RIPPLE_EFFECT: 'js-ripple-effect',
+  RIPPLE_IGNORE_EVENTS: 'js-ripple-effect--ignore-events',
+  RIPPLE_CONTAINER: 'icon-ripple',
+  RIPPLE_CENTER: 'ripple--center',
+  RIPPLE: 'ripple',
+  IS_FOCUSED: 'is-focused',
+  IS_DISABLED: 'is-disabled',
+  IS_CHECKED: 'is-checked'
+};
+
+/**
+ * Handle change of state.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffIconToggle.prototype.onChange_ = function(event) {
+  'use strict';
+
+  this.updateClasses_();
+};
+
+/**
+ * Handle focus of element.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffIconToggle.prototype.onFocus_ = function(event) {
+  'use strict';
+
+  this.element_.classList.add(this.CssClasses_.IS_FOCUSED);
+};
+
+/**
+ * Handle lost focus of element.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffIconToggle.prototype.onBlur_ = function(event) {
+  'use strict';
+
+  this.element_.classList.remove(this.CssClasses_.IS_FOCUSED);
+};
+
+/**
+ * Handle mouseup.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffIconToggle.prototype.onMouseUp_ = function(event) {
+  'use strict';
+
+  this.blur_();
+};
+
+/**
+ * Handle class updates.
+ * @param {HTMLElement} button The button whose classes we should update.
+ * @param {HTMLElement} label The label whose classes we should update.
+ * @private
+ */
+ffIconToggle.prototype.updateClasses_ = function() {
+  'use strict';
+  this.checkDisabled();
+  this.checkToggleState();
+};
+
+/**
+ * Add blur.
+ * @private
+ */
+ffIconToggle.prototype.blur_ = function(event) {
+  'use strict';
+
+  // TODO: figure out why there's a focus event being fired after our blur,
+  // so that we can avoid this hack.
+  window.setTimeout(function() {
+    this.inputElement_.blur();
+  }.bind(this), this.Constant_.TINY_TIMEOUT);
+};
+
+// Public methods.
+
+/**
+* Check the inputs toggle state and update display.
+* @public
+*/
+ffIconToggle.prototype.checkToggleState = function() {
+  'use strict';
+  if (this.inputElement_.checked) {
+    this.element_.classList.add(this.CssClasses_.IS_CHECKED);
+  } else {
+    this.element_.classList.remove(this.CssClasses_.IS_CHECKED);
+  }
+};
+
+/**
+* Check the inputs disabled state and update display.
+* @public
+*/
+ffIconToggle.prototype.checkDisabled = function() {
+  'use strict';
+  if (this.inputElement_.disabled) {
+    this.element_.classList.add(this.CssClasses_.IS_DISABLED);
+  } else {
+    this.element_.classList.remove(this.CssClasses_.IS_DISABLED);
+  }
+};
+
+/**
+ * Disable icon toggle.
+ * @public
+ */
+ffIconToggle.prototype.disable = function() {
+  'use strict';
+
+  this.inputElement_.disabled = true;
+  this.updateClasses_();
+};
+
+/**
+ * Enable icon toggle.
+ * @public
+ */
+ffIconToggle.prototype.enable = function() {
+  'use strict';
+
+  this.inputElement_.disabled = false;
+  this.updateClasses_();
+};
+
+/**
+ * Check icon toggle.
+ * @public
+ */
+ffIconToggle.prototype.check = function() {
+  'use strict';
+
+  this.inputElement_.checked = true;
+  this.updateClasses_();
+};
+
+/**
+ * Uncheck icon toggle.
+ * @public
+ */
+ffIconToggle.prototype.uncheck = function() {
+  'use strict';
+
+  this.inputElement_.checked = false;
+  this.updateClasses_();
+};
+
+/**
+ * Initialize element.
+ */
+ffIconToggle.prototype.init = function() {
+  'use strict';
+
+  if (this.element_) {
+    this.inputElement_ =
+        this.element_.querySelector('.' + this.CssClasses_.INPUT);
+
+    if (this.element_.classList.contains(this.CssClasses_.JS_RIPPLE_EFFECT)) {
+      this.element_.classList.add(this.CssClasses_.RIPPLE_IGNORE_EVENTS);
+      this.rippleContainerElement_ = document.createElement('span');
+      this.rippleContainerElement_.classList.add(this.CssClasses_.RIPPLE_CONTAINER);
+      this.rippleContainerElement_.classList.add(this.CssClasses_.JS_RIPPLE_EFFECT);
+      this.rippleContainerElement_.classList.add(this.CssClasses_.RIPPLE_CENTER);
+      this.boundRippleMouseUp = this.onMouseUp_.bind(this);
+      this.rippleContainerElement_.addEventListener('mouseup', this.boundRippleMouseUp);
+
+      var ripple = document.createElement('span');
+      ripple.classList.add(this.CssClasses_.RIPPLE);
+
+      this.rippleContainerElement_.appendChild(ripple);
+      this.element_.appendChild(this.rippleContainerElement_);
+    }
+
+    this.boundInputOnChange = this.onChange_.bind(this);
+    this.boundInputOnFocus = this.onFocus_.bind(this);
+    this.boundInputOnBlur = this.onBlur_.bind(this);
+    this.boundElementOnMouseUp = this.onMouseUp_.bind(this);
+    this.inputElement_.addEventListener('change', this.boundInputOnChange);
+    this.inputElement_.addEventListener('focus', this.boundInputOnFocus);
+    this.inputElement_.addEventListener('blur', this.boundInputOnBlur);
+    this.element_.addEventListener('mouseup', this.boundElementOnMouseUp);
+
+    this.updateClasses_();
+    this.element_.classList.add('is-upgraded');
+  }
+};
+
+/*
+* Downgrade the component
+*/
+ffIconToggle.prototype.coreDowngrade_ = function() {
+  'use strict';
+  if (this.rippleContainerElement_) {
+    this.rippleContainerElement_.removeEventListener('mouseup', this.boundRippleMouseUp);
+  }
+  this.inputElement_.removeEventListener('change', this.boundInputOnChange);
+  this.inputElement_.removeEventListener('focus', this.boundInputOnFocus);
+  this.inputElement_.removeEventListener('blur', this.boundInputOnBlur);
+  this.element_.removeEventListener('mouseup', this.boundElementOnMouseUp);
+};
+
+// The component registers itself. It can assume componentHandler is available
+// in the global scope.
+componentHandler.register({
+  constructor: ffIconToggle,
+  classAsString: 'ffIconToggle',
+  cssClass: 'js-icon-toggle',
+  widget: true
+});
+
+/**
+ * @license
+ * Copyright 2015 failcoder Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Class constructor for dropdown component.
+ * Implements component design pattern defined at:
+ * https://github.com/jasonmayes/component-design-pattern
+ * @param {HTMLElement} element The element that will be upgraded.
+ */
+function ffMenu(element) {
+  'use strict';
+
+  this.element_ = element;
+
+  // Initialize instance.
+  this.init();
+}
+
+/**
+ * Store constants in one place so they can be updated easily.
+ * @enum {string | number}
+ * @private
+ */
+ffMenu.prototype.Constant_ = {
+  // Total duration of the menu animation.
+  TRANSITION_DURATION_SECONDS: 0.3,
+  // The fraction of the total duration we want to use for menu item animations.
+  TRANSITION_DURATION_FRACTION: 0.8,
+  // How long the menu stays open after choosing an option (so the user can see
+  // the ripple).
+  CLOSE_TIMEOUT: 150
+};
+
+/**
+ * Keycodes, for code readability.
+ * @enum {number}
+ * @private
+ */
+ffMenu.prototype.Keycodes_ = {
+  ENTER: 13,
+  ESCAPE: 27,
+  SPACE: 32,
+  UP_ARROW: 38,
+  DOWN_ARROW: 40
+};
+
+/**
+ * Store strings for class names defined by this component that are used in
+ * JavaScript. This allows us to simply change it in one place should we
+ * decide to modify at a later date.
+ * @enum {string}
+ * @private
+ */
+ffMenu.prototype.CssClasses_ = {
+  CONTAINER: 'menu-container',
+  OUTLINE: 'menu-outline',
+  ITEM: 'menu-item',
+  ITEM_RIPPLE_CONTAINER: 'menu-item-ripple-container',
+  RIPPLE_EFFECT: 'js-ripple-effect',
+  RIPPLE_IGNORE_EVENTS: 'js-ripple-effect--ignore-events',
+  RIPPLE: 'ripple',
+  // Statuses
+  IS_UPGRADED: 'is-upgraded',
+  IS_VISIBLE: 'is-visible',
+  IS_ANIMATING: 'is-animating',
+  // Alignment options
+  BOTTOM_LEFT: 'menu--bottom-left',  // This is the default.
+  BOTTOM_RIGHT: 'menu--bottom-right',
+  TOP_LEFT: 'menu--top-left',
+  TOP_RIGHT: 'menu--top-right',
+  UNALIGNED: 'menu--unaligned'
+};
+
+/**
+ * Initialize element.
+ */
+ffMenu.prototype.init = function() {
+  'use strict';
+
+  if (this.element_) {
+    // Create container for the menu.
+    var container = document.createElement('div');
+    container.classList.add(this.CssClasses_.CONTAINER);
+    this.element_.parentElement.insertBefore(container, this.element_);
+    this.element_.parentElement.removeChild(this.element_);
+    container.appendChild(this.element_);
+    this.container_ = container;
+
+    // Create outline for the menu (shadow and background).
+    var outline = document.createElement('div');
+    outline.classList.add(this.CssClasses_.OUTLINE);
+    this.outline_ = outline;
+    container.insertBefore(outline, this.element_);
+
+    // Find the "for" element and bind events to it.
+    var forElId = this.element_.getAttribute('for');
+    var forEl = null;
+    if (forElId) {
+      forEl = document.getElementById(forElId);
+      if (forEl) {
+        this.forElement_ = forEl;
+        forEl.addEventListener('click', this.handleForClick_.bind(this));
+        forEl.addEventListener('keydown',
+            this.handleForKeyboardEvent_.bind(this));
       }
-    },
+    }
 
-    cache : {},
+    var items = this.element_.querySelectorAll('.' + this.CssClasses_.ITEM);
 
-    init : function (scope, method, options) {
-      Foundation.inherit(this, 'random_str');
-      this.bindings(method, options);
-    },
+    for (var i = 0; i < items.length; i++) {
+      // Add a listener to each menu item.
+      items[i].addEventListener('click', this.handleItemClick_.bind(this));
+      // Add a tab index to each menu item.
+      items[i].tabIndex = '-1';
+      // Add a keyboard listener to each menu item.
+      items[i].addEventListener('keydown',
+          this.handleItemKeyboardEvent_.bind(this));
+    }
 
-    should_show : function (target, tip) {
-      var settings = $.extend({}, this.settings, this.data_options(target));
+    // Add ripple classes to each item, if the user has enabled ripples.
+    if (this.element_.classList.contains(this.CssClasses_.RIPPLE_EFFECT)) {
+      this.element_.classList.add(this.CssClasses_.RIPPLE_IGNORE_EVENTS);
 
-      if (settings.show_on === 'all') {
-        return true;
-      } else if (this.small() && settings.show_on === 'small') {
-        return true;
-      } else if (this.medium() && settings.show_on === 'medium') {
-        return true;
-      } else if (this.large() && settings.show_on === 'large') {
-        return true;
+      for (i = 0; i < items.length; i++) {
+        var item = items[i];
+
+        var rippleContainer = document.createElement('span');
+        rippleContainer.classList.add(this.CssClasses_.ITEM_RIPPLE_CONTAINER);
+
+        var ripple = document.createElement('span');
+        ripple.classList.add(this.CssClasses_.RIPPLE);
+        rippleContainer.appendChild(ripple);
+
+        item.appendChild(rippleContainer);
+        item.classList.add(this.CssClasses_.RIPPLE_EFFECT);
       }
-      return false;
-    },
+    }
 
-    medium : function () {
-      return matchMedia(Foundation.media_queries['medium']).matches;
-    },
+    // Copy alignment classes to the container, so the outline can use them.
+    if (this.element_.classList.contains(this.CssClasses_.BOTTOM_LEFT)) {
+      this.outline_.classList.add(this.CssClasses_.BOTTOM_LEFT);
+    }
+    if (this.element_.classList.contains(this.CssClasses_.BOTTOM_RIGHT)) {
+      this.outline_.classList.add(this.CssClasses_.BOTTOM_RIGHT);
+    }
+    if (this.element_.classList.contains(this.CssClasses_.TOP_LEFT)) {
+      this.outline_.classList.add(this.CssClasses_.TOP_LEFT);
+    }
+    if (this.element_.classList.contains(this.CssClasses_.TOP_RIGHT)) {
+      this.outline_.classList.add(this.CssClasses_.TOP_RIGHT);
+    }
+    if (this.element_.classList.contains(this.CssClasses_.UNALIGNED)) {
+      this.outline_.classList.add(this.CssClasses_.UNALIGNED);
+    }
 
-    large : function () {
-      return matchMedia(Foundation.media_queries['large']).matches;
-    },
+    container.classList.add(this.CssClasses_.IS_UPGRADED);
+  }
+};
 
-    events : function (instance) {
-      var self = this,
-          S = self.S;
+/**
+ * Handles a click on the "for" element, by positioning the menu and then
+ * toggling it.
+ * @private
+ */
+ffMenu.prototype.handleForClick_ = function(evt) {
+  'use strict';
 
-      self.create(this.S(instance));
+  if (this.element_ && this.forElement_) {
+    var rect = this.forElement_.getBoundingClientRect();
+    var forRect = this.forElement_.parentElement.getBoundingClientRect();
 
-      function _startShow(elt, $this, immediate) {
-        if (elt.timer) {
-          return;
-        }
+    if (this.element_.classList.contains(this.CssClasses_.UNALIGNED)) {
+      // Do not position the menu automatically. Requires the developer to
+      // manually specify position.
+    } else if (this.element_.classList.contains(
+        this.CssClasses_.BOTTOM_RIGHT)) {
+      // Position below the "for" element, aligned to its right.
+      this.container_.style.right = (forRect.right - rect.right) + 'px';
+      this.container_.style.top =
+          this.forElement_.offsetTop + this.forElement_.offsetHeight + 'px';
+    } else if (this.element_.classList.contains(this.CssClasses_.TOP_LEFT)) {
+      // Position above the "for" element, aligned to its left.
+      this.container_.style.left = this.forElement_.offsetLeft + 'px';
+      this.container_.style.bottom = (forRect.bottom - rect.top) + 'px';
+    } else if (this.element_.classList.contains(this.CssClasses_.TOP_RIGHT)) {
+      // Position above the "for" element, aligned to its right.
+      this.container_.style.right = (forRect.right - rect.right) + 'px';
+      this.container_.style.bottom = (forRect.bottom - rect.top) + 'px';
+    } else {
+      // Default: position below the "for" element, aligned to its left.
+      this.container_.style.left = this.forElement_.offsetLeft + 'px';
+      this.container_.style.top =
+          this.forElement_.offsetTop + this.forElement_.offsetHeight + 'px';
+    }
+  }
 
-        if (immediate) {
-          elt.timer = null;
-          self.showTip($this);
+  this.toggle(evt);
+};
+
+/**
+ * Handles a keyboard event on the "for" element.
+ * @private
+ */
+ffMenu.prototype.handleForKeyboardEvent_ = function(evt) {
+  'use strict';
+
+  if (this.element_ && this.container_ && this.forElement_) {
+    var items = this.element_.querySelectorAll('.' + this.CssClasses_.ITEM +
+      ':not([disabled])');
+
+    if (items && items.length > 0 &&
+        this.container_.classList.contains(this.CssClasses_.IS_VISIBLE)) {
+      if (evt.keyCode === this.Keycodes_.UP_ARROW) {
+        evt.preventDefault();
+        items[items.length - 1].focus();
+      } else if (evt.keyCode === this.Keycodes_.DOWN_ARROW) {
+        evt.preventDefault();
+        items[0].focus();
+      }
+    }
+  }
+};
+
+/**
+ * Handles a keyboard event on an item.
+ * @private
+ */
+ffMenu.prototype.handleItemKeyboardEvent_ = function(evt) {
+  'use strict';
+
+  if (this.element_ && this.container_) {
+    var items = this.element_.querySelectorAll('.' + this.CssClasses_.ITEM +
+      ':not([disabled])');
+
+    if (items && items.length > 0 &&
+        this.container_.classList.contains(this.CssClasses_.IS_VISIBLE)) {
+      var currentIndex = Array.prototype.slice.call(items).indexOf(evt.target);
+
+      if (evt.keyCode === this.Keycodes_.UP_ARROW) {
+        evt.preventDefault();
+        if (currentIndex > 0) {
+          items[currentIndex - 1].focus();
         } else {
-          elt.timer = setTimeout(function () {
-            elt.timer = null;
-            self.showTip($this);
-          }.bind(elt), self.settings.hover_delay);
+          items[items.length - 1].focus();
         }
-      }
-
-      function _startHide(elt, $this) {
-        if (elt.timer) {
-          clearTimeout(elt.timer);
-          elt.timer = null;
+      } else if (evt.keyCode === this.Keycodes_.DOWN_ARROW) {
+        evt.preventDefault();
+        if (items.length > currentIndex + 1) {
+          items[currentIndex + 1].focus();
+        } else {
+          items[0].focus();
         }
-
-        self.hide($this);
+      } else if (evt.keyCode === this.Keycodes_.SPACE ||
+            evt.keyCode === this.Keycodes_.ENTER) {
+        evt.preventDefault();
+        // Send mousedown and mouseup to trigger ripple.
+        var e = new MouseEvent('mousedown');
+        evt.target.dispatchEvent(e);
+        e = new MouseEvent('mouseup');
+        evt.target.dispatchEvent(e);
+        // Send click.
+        evt.target.click();
+      } else if (evt.keyCode === this.Keycodes_.ESCAPE) {
+        evt.preventDefault();
+        this.hide();
       }
+    }
+  }
+};
 
-      $(this.scope)
-        .off('.tooltip')
-        .on('mouseenter.fndtn.tooltip mouseleave.fndtn.tooltip touchstart.fndtn.tooltip MSPointerDown.fndtn.tooltip',
-          '[' + this.attr_name() + ']', function (e) {
-          var $this = S(this),
-              settings = $.extend({}, self.settings, self.data_options($this)),
-              is_touch = false;
+/**
+ * Handles a click event on an item.
+ * @private
+ */
+ffMenu.prototype.handleItemClick_ = function(evt) {
+  'use strict';
 
-          if (Modernizr.touch && /touchstart|MSPointerDown/i.test(e.type) && S(e.target).is('a')) {
-            return false;
-          }
+  if (evt.target.getAttribute('disabled') !== null) {
+    evt.stopPropagation();
+  } else {
+    // Wait some time before closing menu, so the user can see the ripple.
+    this.closing_ = true;
+    window.setTimeout(function(evt) {
+      this.hide();
+      this.closing_ = false;
+    }.bind(this), this.Constant_.CLOSE_TIMEOUT);
+  }
+};
 
-          if (/mouse/i.test(e.type) && self.ie_touch(e)) {
-            return false;
-          }
-          
-          if ($this.hasClass('open')) {
-            if (Modernizr.touch && /touchstart|MSPointerDown/i.test(e.type)) {
-              e.preventDefault();
-            }
-            self.hide($this);
-          } else {
-            if (settings.disable_for_touch && Modernizr.touch && /touchstart|MSPointerDown/i.test(e.type)) {
-              return;
-            } else if (!settings.disable_for_touch && Modernizr.touch && /touchstart|MSPointerDown/i.test(e.type)) {
-              e.preventDefault();
-              S(settings.tooltip_class + '.open').hide();
-              is_touch = true;
-              // close other open tooltips on touch
-              if ($('.open[' + self.attr_name() + ']').length > 0) {
-               var prevOpen = S($('.open[' + self.attr_name() + ']')[0]);
-               self.hide(prevOpen);
-              }
-            }
+/**
+ * Calculates the initial clip (for opening the menu) or final clip (for closing
+ * it), and applies it. This allows us to animate from or to the correct point,
+ * that is, the point it's aligned to in the "for" element.
+ * @private
+ */
+ffMenu.prototype.applyClip_ = function(height, width) {
+  'use strict';
 
-            if (/enter|over/i.test(e.type)) {
-              _startShow(this, $this);
+  if (this.element_.classList.contains(this.CssClasses_.UNALIGNED)) {
+    // Do not clip.
+    this.element_.style.clip = null;
+  } else if (this.element_.classList.contains(this.CssClasses_.BOTTOM_RIGHT)) {
+    // Clip to the top right corner of the menu.
+    this.element_.style.clip =
+        'rect(0 ' + width + 'px ' + '0 ' + width + 'px)';
+  } else if (this.element_.classList.contains(this.CssClasses_.TOP_LEFT)) {
+    // Clip to the bottom left corner of the menu.
+    this.element_.style.clip =
+        'rect(' + height + 'px 0 ' + height + 'px 0)';
+  } else if (this.element_.classList.contains(this.CssClasses_.TOP_RIGHT)) {
+    // Clip to the bottom right corner of the menu.
+    this.element_.style.clip = 'rect(' + height + 'px ' + width + 'px ' +
+        height + 'px ' + width + 'px)';
+  } else {
+    // Default: do not clip (same as clipping to the top left corner).
+    this.element_.style.clip = null;
+  }
+};
 
-            } else if (e.type === 'mouseout' || e.type === 'mouseleave') {
-              _startHide(this, $this);
-            } else {
-              _startShow(this, $this, true);
-            }
-          }
-        })
-        .on('mouseleave.fndtn.tooltip touchstart.fndtn.tooltip MSPointerDown.fndtn.tooltip', '[' + this.attr_name() + '].open', function (e) {
-          if (/mouse/i.test(e.type) && self.ie_touch(e)) {
-            return false;
-          }
+/**
+ * Adds an event listener to clean up after the animation ends.
+ * @private
+ */
+ffMenu.prototype.addAnimationEndListener_ = function() {
+  'use strict';
 
-          if ($(this).data('tooltip-open-event-type') == 'touch' && e.type == 'mouseleave') {
-            return;
-          } else if ($(this).data('tooltip-open-event-type') == 'mouse' && /MSPointerDown|touchstart/i.test(e.type)) {
-            self.convert_to_touch($(this));
-          } else {
-            _startHide(this, $(this));
-          }
-        })
-        .on('DOMNodeRemoved DOMAttrModified', '[' + this.attr_name() + ']:not(a)', function (e) {
-          _startHide(this, S(this));
-        });
-    },
+  var cleanup = function () {
+    this.element_.removeEventListener('transitionend', cleanup);
+    this.element_.removeEventListener('webkitTransitionEnd', cleanup);
+    this.element_.classList.remove(this.CssClasses_.IS_ANIMATING);
+  }.bind(this);
 
-    ie_touch : function (e) {
-      // How do I distinguish between IE11 and Windows Phone 8?????
-      return false;
-    },
+  // Remove animation class once the transition is done.
+  this.element_.addEventListener('transitionend', cleanup);
+  this.element_.addEventListener('webkitTransitionEnd', cleanup);
+};
 
-    showTip : function ($target) {
-      var $tip = this.getTip($target);
-      if (this.should_show($target, $tip)) {
-        return this.show($target);
-      }
-      return;
-    },
+/**
+ * Displays the menu.
+ * @public
+ */
+ffMenu.prototype.show = function(evt) {
+  'use strict';
 
-    getTip : function ($target) {
-      var selector = this.selector($target),
-          settings = $.extend({}, this.settings, this.data_options($target)),
-          tip = null;
+  if (this.element_ && this.container_ && this.outline_) {
+    // Measure the inner element.
+    var height = this.element_.getBoundingClientRect().height;
+    var width = this.element_.getBoundingClientRect().width;
 
-      if (selector) {
-        tip = this.S('span[data-selector="' + selector + '"]' + settings.tooltip_class);
-      }
+    // Apply the inner element's size to the container and outline.
+    this.container_.style.width = width + 'px';
+    this.container_.style.height = height + 'px';
+    this.outline_.style.width = width + 'px';
+    this.outline_.style.height = height + 'px';
 
-      return (typeof tip === 'object') ? tip : false;
-    },
+    var transitionDuration = this.Constant_.TRANSITION_DURATION_SECONDS *
+        this.Constant_.TRANSITION_DURATION_FRACTION;
 
-    selector : function ($target) {
-      var dataSelector = $target.attr(this.attr_name()) || $target.attr('data-selector');
-
-      if (typeof dataSelector != 'string') {
-        dataSelector = this.random_str(6);
-        $target
-          .attr('data-selector', dataSelector)
-          .attr('aria-describedby', dataSelector);
-      }
-
-      return dataSelector;
-    },
-
-    create : function ($target) {
-      var self = this,
-          settings = $.extend({}, this.settings, this.data_options($target)),
-          tip_template = this.settings.tip_template;
-
-      if (typeof settings.tip_template === 'string' && window.hasOwnProperty(settings.tip_template)) {
-        tip_template = window[settings.tip_template];
-      }
-
-      var $tip = $(tip_template(this.selector($target), $('<div></div>').html($target.attr('title')).html())),
-          classes = this.inheritable_classes($target);
-
-      $tip.addClass(classes).appendTo(settings.append_to);
-
-      if (Modernizr.touch) {
-        $tip.append('<span class="tap-to-close">' + settings.touch_close_text + '</span>');
-        $tip.on('touchstart.fndtn.tooltip MSPointerDown.fndtn.tooltip', function (e) {
-          self.hide($target);
-        });
-      }
-
-      $target.removeAttr('title').attr('title', '');
-    },
-
-    reposition : function (target, tip, classes) {
-      var width, nub, nubHeight, nubWidth, column, objPos;
-
-      tip.css('visibility', 'hidden').show();
-
-      width = target.data('width');
-      nub = tip.children('.nub');
-      nubHeight = nub.outerHeight();
-      nubWidth = nub.outerHeight();
-
-      if (this.small()) {
-        tip.css({'width' : '100%'});
+    // Calculate transition delays for individual menu items, so that they fade
+    // in one at a time.
+    var items = this.element_.querySelectorAll('.' + this.CssClasses_.ITEM);
+    for (var i = 0; i < items.length; i++) {
+      var itemDelay = null;
+      if (this.element_.classList.contains(this.CssClasses_.TOP_LEFT) ||
+          this.element_.classList.contains(this.CssClasses_.TOP_RIGHT)) {
+        itemDelay = ((height - items[i].offsetTop - items[i].offsetHeight) /
+            height * transitionDuration) + 's';
       } else {
-        tip.css({'width' : (width) ? width : 'auto'});
+        itemDelay = (items[i].offsetTop / height * transitionDuration) + 's';
+      }
+      items[i].style.transitionDelay = itemDelay;
+    }
+
+    // Apply the initial clip to the text before we start animating.
+    this.applyClip_(height, width);
+
+    // Wait for the next frame, turn on animation, and apply the final clip.
+    // Also make it visible. This triggers the transitions.
+    window.requestAnimationFrame(function() {
+      this.element_.classList.add(this.CssClasses_.IS_ANIMATING);
+      this.element_.style.clip = 'rect(0 ' + width + 'px ' + height + 'px 0)';
+      this.container_.classList.add(this.CssClasses_.IS_VISIBLE);
+    }.bind(this));
+
+    // Clean up after the animation is complete.
+    this.addAnimationEndListener_();
+
+    // Add a click listener to the document, to close the menu.
+    var callback = function(e) {
+      // Check to see if the document is processing the same event that
+      // displayed the menu in the first place. If so, do nothing.
+      // Also check to see if the menu is in the process of closing itself, and
+      // do nothing in that case.
+      if (e !== evt && !this.closing_) {
+        document.removeEventListener('click', callback);
+        this.hide();
+      }
+    }.bind(this);
+    document.addEventListener('click', callback);
+  }
+};
+
+/**
+ * Hides the menu.
+ * @public
+ */
+ffMenu.prototype.hide = function() {
+  'use strict';
+
+  if (this.element_ && this.container_ && this.outline_) {
+    var items = this.element_.querySelectorAll('.' + this.CssClasses_.ITEM);
+
+    // Remove all transition delays; menu items fade out concurrently.
+    for (var i = 0; i < items.length; i++) {
+      items[i].style.transitionDelay = null;
+    }
+
+    // Measure the inner element.
+    var height = this.element_.getBoundingClientRect().height;
+    var width = this.element_.getBoundingClientRect().width;
+
+    // Turn on animation, and apply the final clip. Also make invisible.
+    // This triggers the transitions.
+    this.element_.classList.add(this.CssClasses_.IS_ANIMATING);
+    this.applyClip_(height, width);
+    this.container_.classList.remove(this.CssClasses_.IS_VISIBLE);
+
+    // Clean up after the animation is complete.
+    this.addAnimationEndListener_();
+  }
+};
+
+/**
+ * Displays or hides the menu, depending on current state.
+ * @public
+ */
+ffMenu.prototype.toggle = function(evt) {
+  'use strict';
+
+  if (this.container_.classList.contains(this.CssClasses_.IS_VISIBLE)) {
+    this.hide();
+  } else {
+    this.show(evt);
+  }
+};
+
+// The component registers itself. It can assume componentHandler is available
+// in the global scope.
+componentHandler.register({
+  constructor: ffMenu,
+  classAsString: 'ffMenu',
+  cssClass: 'js-menu',
+  widget: true
+});
+
+/**
+ * @license
+ * Copyright 2015 failcoder Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Class constructor for Progress component.
+ * Implements component design pattern defined at:
+ * https://github.com/jasonmayes/component-design-pattern
+ * @param {HTMLElement} element The element that will be upgraded.
+ */
+function ffProgress(element) {
+  'use strict';
+
+  this.element_ = element;
+
+  // Initialize instance.
+  this.init();
+}
+
+/**
+ * Store constants in one place so they can be updated easily.
+ * @enum {string | number}
+ * @private
+ */
+ffProgress.prototype.Constant_ = {
+};
+
+/**
+ * Store strings for class names defined by this component that are used in
+ * JavaScript. This allows us to simply change it in one place should we
+ * decide to modify at a later date.
+ * @enum {string}
+ * @private
+ */
+ffProgress.prototype.CssClasses_ = {
+  INDETERMINATE_CLASS: 'progress-indeterminate'
+};
+
+ffProgress.prototype.setProgress = function(p) {
+  'use strict';
+
+  if (this.element_.classList.contains(this.CssClasses_.INDETERMINATE_CLASS)) {
+    return;
+  }
+
+  this.progressbar_.style.width = p + '%';
+};
+
+ffProgress.prototype.setBuffer = function(p) {
+  'use strict';
+
+  this.bufferbar_.style.width = p + '%';
+  this.auxbar_.style.width = (100 - p) + '%';
+};
+
+/**
+ * Initialize element.
+ */
+ffProgress.prototype.init = function() {
+  'use strict';
+
+  if (this.element_) {
+    var el = document.createElement('div');
+    el.className = 'progressbar bar bar1';
+    this.element_.appendChild(el);
+    this.progressbar_ = el;
+
+    el = document.createElement('div');
+    el.className = 'bufferbar bar bar2';
+    this.element_.appendChild(el);
+    this.bufferbar_ = el;
+
+    el = document.createElement('div');
+    el.className = 'auxbar bar bar3';
+    this.element_.appendChild(el);
+    this.auxbar_ = el;
+
+    this.progressbar_.style.width = '0%';
+    this.bufferbar_.style.width = '100%';
+    this.auxbar_.style.width = '0%';
+
+    this.element_.classList.add('is-upgraded');
+  }
+};
+
+/*
+* Downgrade the component
+*/
+ffProgress.prototype.coreDowngrade_ = function() {
+  'use strict';
+  while (this.element_.firstChild) {
+    this.element_.removeChild(this.element_.firstChild);
+  }
+};
+
+// The component registers itself. It can assume componentHandler is available
+// in the global scope.
+componentHandler.register({
+  constructor: ffProgress,
+  classAsString: 'ffProgress',
+  cssClass: 'js-progress',
+  widget: true
+});
+
+/**
+ * @license
+ * Copyright 2015 failcoder Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Class constructor for Radio component.
+ * Implements component design pattern defined at:
+ * https://github.com/jasonmayes/component-design-pattern
+ * @param {HTMLElement} element The element that will be upgraded.
+ */
+function ffRadio(element) {
+  'use strict';
+
+  this.element_ = element;
+
+  // Initialize instance.
+  this.init();
+}
+
+/**
+ * Store constants in one place so they can be updated easily.
+ * @enum {string | number}
+ * @private
+ */
+ffRadio.prototype.Constant_ = {
+  TINY_TIMEOUT: 0.001
+};
+
+/**
+ * Store strings for class names defined by this component that are used in
+ * JavaScript. This allows us to simply change it in one place should we
+ * decide to modify at a later date.
+ * @enum {string}
+ * @private
+ */
+ffRadio.prototype.CssClasses_ = {
+  IS_FOCUSED: 'is-focused',
+  IS_DISABLED: 'is-disabled',
+  IS_CHECKED: 'is-checked',
+  IS_UPGRADED: 'is-upgraded',
+  JS_RADIO: 'js-radio',
+  RADIO_BTN: 'radio__button',
+  RADIO_OUTER_CIRCLE: 'radio__outer-circle',
+  RADIO_INNER_CIRCLE: 'radio__inner-circle',
+  RIPPLE_EFFECT: 'js-ripple-effect',
+  RIPPLE_IGNORE_EVENTS: 'js-ripple-effect--ignore-events',
+  RIPPLE_CONTAINER: 'radio-ripple',
+  RIPPLE_CENTER: 'ripple--center',
+  RIPPLE: 'ripple'
+};
+
+/**
+ * Handle change of state.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffRadio.prototype.onChange_ = function(event) {
+  'use strict';
+
+  // Since other radio buttons don't get change events, we need to look for
+  // them to update their classes.
+  var radios = document.getElementsByClassName(this.CssClasses_.JS_RADIO);
+  for (var i = 0; i < radios.length; i++) {
+    var button = radios[i].querySelector('.' + this.CssClasses_.RADIO_BTN);
+    // Different name == different group, so no point updating those.
+    if (button.getAttribute('name') === this.btnElement_.getAttribute('name')) {
+      radios[i].ffRadio.updateClasses_();
+    }
+  }
+};
+
+/**
+ * Handle focus.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffRadio.prototype.onFocus_ = function(event) {
+  'use strict';
+
+  this.element_.classList.add(this.CssClasses_.IS_FOCUSED);
+};
+
+/**
+ * Handle lost focus.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffRadio.prototype.onBlur_ = function(event) {
+  'use strict';
+
+  this.element_.classList.remove(this.CssClasses_.IS_FOCUSED);
+};
+
+/**
+ * Handle mouseup.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffRadio.prototype.onMouseup_ = function(event) {
+  'use strict';
+
+  this.blur_();
+};
+
+/**
+ * Update classes.
+ * @private
+ */
+ffRadio.prototype.updateClasses_ = function() {
+  'use strict';
+  this.checkDisabled();
+  this.checkToggleState();
+};
+
+/**
+ * Add blur.
+ * @private
+ */
+ffRadio.prototype.blur_ = function(event) {
+  'use strict';
+
+  // TODO: figure out why there's a focus event being fired after our blur,
+  // so that we can avoid this hack.
+  window.setTimeout(function() {
+    this.btnElement_.blur();
+  }.bind(this), this.Constant_.TINY_TIMEOUT);
+};
+
+// Public methods.
+
+/**
+* Check the components disabled state.
+* @public
+*/
+ffRadio.prototype.checkDisabled = function() {
+  'use strict';
+  if (this.btnElement_.disabled) {
+    this.element_.classList.add(this.CssClasses_.IS_DISABLED);
+  } else {
+    this.element_.classList.remove(this.CssClasses_.IS_DISABLED);
+  }
+};
+
+/**
+* Check the components toggled state.
+* @public
+*/
+ffRadio.prototype.checkToggleState = function() {
+  'use strict';
+  if (this.btnElement_.checked) {
+    this.element_.classList.add(this.CssClasses_.IS_CHECKED);
+  } else {
+    this.element_.classList.remove(this.CssClasses_.IS_CHECKED);
+  }
+};
+
+/**
+ * Disable radio.
+ * @public
+ */
+ffRadio.prototype.disable = function() {
+  'use strict';
+
+  this.btnElement_.disabled = true;
+  this.updateClasses_();
+};
+
+/**
+ * Enable radio.
+ * @public
+ */
+ffRadio.prototype.enable = function() {
+  'use strict';
+
+  this.btnElement_.disabled = false;
+  this.updateClasses_();
+};
+
+/**
+ * Check radio.
+ * @public
+ */
+ffRadio.prototype.check = function() {
+  'use strict';
+
+  this.btnElement_.checked = true;
+  this.updateClasses_();
+};
+
+/**
+ * Uncheck radio.
+ * @public
+ */
+ffRadio.prototype.uncheck = function() {
+  'use strict';
+
+  this.btnElement_.checked = false;
+  this.updateClasses_();
+};
+
+/**
+ * Initialize element.
+ */
+ffRadio.prototype.init = function() {
+  'use strict';
+
+  if (this.element_) {
+    this.btnElement_ = this.element_.querySelector('.' +
+        this.CssClasses_.RADIO_BTN);
+
+    var outerCircle = document.createElement('span');
+    outerCircle.classList.add(this.CssClasses_.RADIO_OUTER_CIRCLE);
+
+    var innerCircle = document.createElement('span');
+    innerCircle.classList.add(this.CssClasses_.RADIO_INNER_CIRCLE);
+
+    this.element_.appendChild(outerCircle);
+    this.element_.appendChild(innerCircle);
+
+    var rippleContainer;
+    if (this.element_.classList.contains(
+        this.CssClasses_.RIPPLE_EFFECT)) {
+      this.element_.classList.add(
+          this.CssClasses_.RIPPLE_IGNORE_EVENTS);
+      rippleContainer = document.createElement('span');
+      rippleContainer.classList.add(
+          this.CssClasses_.RIPPLE_CONTAINER);
+      rippleContainer.classList.add(this.CssClasses_.RIPPLE_EFFECT);
+      rippleContainer.classList.add(this.CssClasses_.RIPPLE_CENTER);
+      rippleContainer.addEventListener('mouseup', this.onMouseup_.bind(this));
+
+      var ripple = document.createElement('span');
+      ripple.classList.add(this.CssClasses_.RIPPLE);
+
+      rippleContainer.appendChild(ripple);
+      this.element_.appendChild(rippleContainer);
+    }
+
+    this.btnElement_.addEventListener('change', this.onChange_.bind(this));
+    this.btnElement_.addEventListener('focus', this.onFocus_.bind(this));
+    this.btnElement_.addEventListener('blur', this.onBlur_.bind(this));
+    this.element_.addEventListener('mouseup', this.onMouseup_.bind(this));
+
+    this.updateClasses_();
+    this.element_.classList.add(this.CssClasses_.IS_UPGRADED);
+  }
+};
+
+// The component registers itself. It can assume componentHandler is available
+// in the global scope.
+componentHandler.register({
+  constructor: ffRadio,
+  classAsString: 'ffRadio',
+  cssClass: 'js-radio',
+  widget: true
+});
+
+/**
+ * @license
+ * Copyright 2015 failcoder Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Class constructor for Slider component.
+ * Implements component design pattern defined at:
+ * https://github.com/jasonmayes/component-design-pattern
+ * @param {HTMLElement} element The element that will be upgraded.
+ */
+function ffSlider(element) {
+  'use strict';
+
+  this.element_ = element;
+  // Browser feature detection.
+  this.isIE_ = window.navigator.msPointerEnabled;
+  // Initialize instance.
+  this.init();
+}
+
+/**
+ * Store constants in one place so they can be updated easily.
+ * @enum {string | number}
+ * @private
+ */
+ffSlider.prototype.Constant_ = {
+  // None for now.
+};
+
+/**
+ * Store strings for class names defined by this component that are used in
+ * JavaScript. This allows us to simply change it in one place should we
+ * decide to modify at a later date.
+ * @enum {string}
+ * @private
+ */
+ffSlider.prototype.CssClasses_ = {
+  IE_CONTAINER: 'slider__ie-container',
+  SLIDER_CONTAINER: 'slider__container',
+  BACKGROUND_FLEX: 'slider__background-flex',
+  BACKGROUND_LOWER: 'slider__background-lower',
+  BACKGROUND_UPPER: 'slider__background-upper',
+  IS_LOWEST_VALUE: 'is-lowest-value',
+  IS_UPGRADED: 'is-upgraded'
+};
+
+/**
+ * Handle input on element.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffSlider.prototype.onInput_ = function(event) {
+  'use strict';
+
+  this.updateValueStyles_();
+};
+
+/**
+ * Handle change on element.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffSlider.prototype.onChange_ = function(event) {
+  'use strict';
+
+  this.updateValueStyles_();
+};
+
+/**
+ * Handle mouseup on element.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffSlider.prototype.onMouseUp_ = function(event) {
+  'use strict';
+
+  event.target.blur();
+};
+
+/**
+ * Handle mousedown on container element.
+ * This handler is purpose is to not require the use to click
+ * exactly on the 2px slider element, as FireFox seems to be very
+ * strict about this.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffSlider.prototype.onContainerMouseDown_ = function(event) {
+  'use strict';
+
+  // If this click is not on the parent element (but rather some child)
+  // ignore. It may still bubble up.
+  if (event.target !== this.element_.parentElement) {
+    return;
+  }
+
+  // Discard the original event and create a new event that
+  // is on the slider element.
+  event.preventDefault();
+  var newEvent = new MouseEvent('mousedown', {
+    target: event.target,
+    buttons: event.buttons,
+    clientX: event.clientX,
+    clientY: this.element_.getBoundingClientRect().y
+  });
+  this.element_.dispatchEvent(newEvent);
+};
+
+/**
+ * Handle updating of values.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffSlider.prototype.updateValueStyles_ = function(event) {
+  'use strict';
+
+  // Calculate and apply percentages to div structure behind slider.
+  var fraction = (this.element_.value - this.element_.min) /
+      (this.element_.max - this.element_.min);
+
+  if (fraction === 0) {
+    this.element_.classList.add(this.CssClasses_.IS_LOWEST_VALUE);
+  } else {
+    this.element_.classList.remove(this.CssClasses_.IS_LOWEST_VALUE);
+  }
+
+  if (!this.isIE_) {
+    this.backgroundLower_.style.flex = fraction;
+    this.backgroundLower_.style.webkitFlex = fraction;
+    this.backgroundUpper_.style.flex = 1 - fraction;
+    this.backgroundUpper_.style.webkitFlex = 1 - fraction;
+  }
+};
+
+// Public methods.
+
+/**
+ * Disable slider.
+ * @public
+ */
+ffSlider.prototype.disable = function() {
+  'use strict';
+
+  this.element_.disabled = true;
+};
+
+/**
+ * Enable slider.
+ * @public
+ */
+ffSlider.prototype.enable = function() {
+  'use strict';
+
+  this.element_.disabled = false;
+};
+
+/**
+ * Update slider value.
+ * @param {Number} value The value to which to set the control (optional).
+ * @public
+ */
+ffSlider.prototype.change = function(value) {
+  'use strict';
+
+  if (typeof value !== 'undefined') {
+    this.element_.value = value;
+  }
+  this.updateValueStyles_();
+};
+
+/**
+ * Initialize element.
+ */
+ffSlider.prototype.init = function() {
+  'use strict';
+
+  if (this.element_) {
+    if (this.isIE_) {
+      // Since we need to specify a very large height in IE due to
+      // implementation limitations, we add a parent here that trims it down to
+      // a reasonable size.
+      var containerIE = document.createElement('div');
+      containerIE.classList.add(this.CssClasses_.IE_CONTAINER);
+      this.element_.parentElement.insertBefore(containerIE, this.element_);
+      this.element_.parentElement.removeChild(this.element_);
+      containerIE.appendChild(this.element_);
+    } else {
+      // For non-IE browsers, we need a div structure that sits behind the
+      // slider and allows us to style the left and right sides of it with
+      // different colors.
+      var container = document.createElement('div');
+      container.classList.add(this.CssClasses_.SLIDER_CONTAINER);
+      this.element_.parentElement.insertBefore(container, this.element_);
+      this.element_.parentElement.removeChild(this.element_);
+      container.appendChild(this.element_);
+      var backgroundFlex = document.createElement('div');
+      backgroundFlex.classList.add(this.CssClasses_.BACKGROUND_FLEX);
+      container.appendChild(backgroundFlex);
+      this.backgroundLower_ = document.createElement('div');
+      this.backgroundLower_.classList.add(this.CssClasses_.BACKGROUND_LOWER);
+      backgroundFlex.appendChild(this.backgroundLower_);
+      this.backgroundUpper_ = document.createElement('div');
+      this.backgroundUpper_.classList.add(this.CssClasses_.BACKGROUND_UPPER);
+      backgroundFlex.appendChild(this.backgroundUpper_);
+    }
+
+    this.boundInputHandler = this.onInput_.bind(this);
+    this.boundChangeHandler = this.onChange_.bind(this);
+    this.boundMouseUpHandler = this.onMouseUp_.bind(this);
+    this.boundContainerMouseDownHandler = this.onContainerMouseDown_.bind(this);
+    this.element_.addEventListener('input', this.boundInputHandler);
+    this.element_.addEventListener('change', this.boundChangeHandler);
+    this.element_.addEventListener('mouseup', this.boundMouseUpHandler);
+    this.element_.parentElement.addEventListener('mousedown', this.boundContainerMouseDownHandler);
+
+    this.updateValueStyles_();
+    this.element_.classList.add(this.CssClasses_.IS_UPGRADED);
+  }
+};
+
+/*
+* Downgrade the component
+*/
+ffSlider.prototype.coreDowngrade_ = function() {
+  'use strict';
+  this.element_.removeEventListener('input', this.boundInputHandler);
+  this.element_.removeEventListener('change', this.boundChangeHandler);
+  this.element_.removeEventListener('mouseup', this.boundMouseUpHandler);
+  this.element_.parentElement.removeEventListener('mousedown', this.boundContainerMouseDownHandler);
+};
+
+// The component registers itself. It can assume componentHandler is available
+// in the global scope.
+componentHandler.register({
+  constructor: ffSlider,
+  classAsString: 'ffSlider',
+  cssClass: 'js-slider',
+  widget: true
+});
+
+/**
+ * @license
+ * Copyright 2015 failcoder Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Class constructor for Spinner component.
+ * Implements component design pattern defined at:
+ * https://github.com/jasonmayes/component-design-pattern
+ * @param {HTMLElement} element The element that will be upgraded.
+ * @constructor
+ */
+function ffSpinner(element) {
+  'use strict';
+
+  this.element_ = element;
+
+  // Initialize instance.
+  this.init();
+}
+
+/**
+ * Store constants in one place so they can be updated easily.
+ * @enum {string | number}
+ * @private
+ */
+ffSpinner.prototype.Constant_ = {
+  MDL_SPINNER_LAYER_COUNT: 4
+};
+
+/**
+ * Store strings for class names defined by this component that are used in
+ * JavaScript. This allows us to simply change it in one place should we
+ * decide to modify at a later date.
+ * @enum {string}
+ * @private
+ */
+ffSpinner.prototype.CssClasses_ = {
+  MDL_SPINNER_LAYER: 'spinner__layer',
+  MDL_SPINNER_CIRCLE_CLIPPER: 'spinner__circle-clipper',
+  MDL_SPINNER_CIRCLE: 'spinner__circle',
+  MDL_SPINNER_GAP_PATCH: 'spinner__gap-patch',
+  MDL_SPINNER_LEFT: 'spinner__left',
+  MDL_SPINNER_RIGHT: 'spinner__right'
+};
+
+/**
+* Auxiliary method to create a spinner layer.
+*/
+ffSpinner.prototype.createLayer = function(index) {
+  'use strict';
+
+  var layer = document.createElement('div');
+  layer.classList.add(this.CssClasses_.MDL_SPINNER_LAYER);
+  layer.classList.add(this.CssClasses_.MDL_SPINNER_LAYER + '-' + index);
+
+  var leftClipper = document.createElement('div');
+  leftClipper.classList.add(this.CssClasses_.MDL_SPINNER_CIRCLE_CLIPPER);
+  leftClipper.classList.add(this.CssClasses_.MDL_SPINNER_LEFT);
+
+  var gapPatch = document.createElement('div');
+  gapPatch.classList.add(this.CssClasses_.MDL_SPINNER_GAP_PATCH);
+
+  var rightClipper = document.createElement('div');
+  rightClipper.classList.add(this.CssClasses_.MDL_SPINNER_CIRCLE_CLIPPER);
+  rightClipper.classList.add(this.CssClasses_.MDL_SPINNER_RIGHT);
+
+  var circleOwners = [leftClipper, gapPatch, rightClipper];
+
+  for (var i = 0; i < circleOwners.length; i++) {
+    var circle = document.createElement('div');
+    circle.classList.add(this.CssClasses_.MDL_SPINNER_CIRCLE);
+    circleOwners[i].appendChild(circle);
+  }
+
+  layer.appendChild(leftClipper);
+  layer.appendChild(gapPatch);
+  layer.appendChild(rightClipper);
+
+  this.element_.appendChild(layer);
+};
+
+/**
+* Stops the spinner animation.
+* Public method for users who need to stop the spinner for any reason.
+* @public
+*/
+ffSpinner.prototype.stop = function() {
+  'use strict';
+
+  this.element_.classList.remove('is-active');
+};
+
+/**
+* Starts the spinner animation.
+* Public method for users who need to manually start the spinner for any reason
+* (instead of just adding the 'is-active' class to their markup).
+* @public
+*/
+ffSpinner.prototype.start = function() {
+  'use strict';
+
+  this.element_.classList.add('is-active');
+};
+
+/**
+ * Initialize element.
+ */
+ffSpinner.prototype.init = function() {
+  'use strict';
+
+  if (this.element_) {
+    for (var i = 1; i <= this.Constant_.MDL_SPINNER_LAYER_COUNT; i++) {
+      this.createLayer(i);
+    }
+
+    this.element_.classList.add('is-upgraded');
+  }
+};
+
+// The component registers itself. It can assume componentHandler is available
+// in the global scope.
+componentHandler.register({
+  constructor: ffSpinner,
+  classAsString: 'ffSpinner',
+  cssClass: 'js-spinner',
+  widget: true
+});
+
+/**
+ * @license
+ * Copyright 2015 failcoder Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Class constructor for Checkbox component.
+ * Implements component design pattern defined at:
+ * https://github.com/jasonmayes/component-design-pattern
+ * @param {HTMLElement} element The element that will be upgraded.
+ */
+function ffSwitch(element) {
+  'use strict';
+
+  this.element_ = element;
+
+  // Initialize instance.
+  this.init();
+}
+
+/**
+ * Store constants in one place so they can be updated easily.
+ * @enum {string | number}
+ * @private
+ */
+ffSwitch.prototype.Constant_ = {
+  TINY_TIMEOUT: 0.001
+};
+
+/**
+ * Store strings for class names defined by this component that are used in
+ * JavaScript. This allows us to simply change it in one place should we
+ * decide to modify at a later date.
+ * @enum {string}
+ * @private
+ */
+ffSwitch.prototype.CssClasses_ = {
+  INPUT: 'switch__input',
+  TRACK: 'switch__track',
+  THUMB: 'switch__thumb',
+  FOCUS_HELPER: 'switch__focus-helper',
+  RIPPLE_EFFECT: 'js-ripple-effect',
+  RIPPLE_IGNORE_EVENTS: 'js-ripple-effect--ignore-events',
+  RIPPLE_CONTAINER: 'switch-ripple',
+  RIPPLE_CENTER: 'ripple--center',
+  RIPPLE: 'ripple',
+  IS_FOCUSED: 'is-focused',
+  IS_DISABLED: 'is-disabled',
+  IS_CHECKED: 'is-checked'
+};
+
+/**
+ * Handle change of state.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffSwitch.prototype.onChange_ = function(event) {
+  'use strict';
+
+  this.updateClasses_();
+};
+
+/**
+ * Handle focus of element.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffSwitch.prototype.onFocus_ = function(event) {
+  'use strict';
+
+  this.element_.classList.add(this.CssClasses_.IS_FOCUSED);
+};
+
+/**
+ * Handle lost focus of element.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffSwitch.prototype.onBlur_ = function(event) {
+  'use strict';
+
+  this.element_.classList.remove(this.CssClasses_.IS_FOCUSED);
+};
+
+/**
+ * Handle mouseup.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffSwitch.prototype.onMouseUp_ = function(event) {
+  'use strict';
+
+  this.blur_();
+};
+
+/**
+ * Handle class updates.
+ * @private
+ */
+ffSwitch.prototype.updateClasses_ = function() {
+  'use strict';
+  this.checkDisabled();
+  this.checkToggleState();
+};
+
+/**
+ * Add blur.
+ * @private
+ */
+ffSwitch.prototype.blur_ = function(event) {
+  'use strict';
+
+  // TODO: figure out why there's a focus event being fired after our blur,
+  // so that we can avoid this hack.
+  window.setTimeout(function() {
+    this.inputElement_.blur();
+  }.bind(this), this.Constant_.TINY_TIMEOUT);
+};
+
+// Public methods.
+
+/**
+* Check the components disabled state.
+* @public
+*/
+ffSwitch.prototype.checkDisabled = function() {
+  'use strict';
+  if (this.inputElement_.disabled) {
+    this.element_.classList.add(this.CssClasses_.IS_DISABLED);
+  } else {
+    this.element_.classList.remove(this.CssClasses_.IS_DISABLED);
+  }
+};
+
+/**
+* Check the components toggled state.
+* @public
+*/
+ffSwitch.prototype.checkToggleState = function() {
+  'use strict';
+  if (this.inputElement_.checked) {
+    this.element_.classList.add(this.CssClasses_.IS_CHECKED);
+  } else {
+    this.element_.classList.remove(this.CssClasses_.IS_CHECKED);
+  }
+};
+
+/**
+ * Disable switch.
+ * @public
+ */
+ffSwitch.prototype.disable = function() {
+  'use strict';
+
+  this.inputElement_.disabled = true;
+  this.updateClasses_();
+};
+
+/**
+ * Enable switch.
+ * @public
+ */
+ffSwitch.prototype.enable = function() {
+  'use strict';
+
+  this.inputElement_.disabled = false;
+  this.updateClasses_();
+};
+
+/**
+ * Activate switch.
+ * @public
+ */
+ffSwitch.prototype.on = function() {
+  'use strict';
+
+  this.inputElement_.checked = true;
+  this.updateClasses_();
+};
+
+/**
+ * Deactivate switch.
+ * @public
+ */
+ffSwitch.prototype.off = function() {
+  'use strict';
+
+  this.inputElement_.checked = false;
+  this.updateClasses_();
+};
+
+/**
+ * Initialize element.
+ */
+ffSwitch.prototype.init = function() {
+  'use strict';
+
+  if (this.element_) {
+    this.inputElement_ = this.element_.querySelector('.' +
+        this.CssClasses_.INPUT);
+
+    var track = document.createElement('div');
+    track.classList.add(this.CssClasses_.TRACK);
+
+    var thumb = document.createElement('div');
+    thumb.classList.add(this.CssClasses_.THUMB);
+
+    var focusHelper = document.createElement('span');
+    focusHelper.classList.add(this.CssClasses_.FOCUS_HELPER);
+
+    thumb.appendChild(focusHelper);
+
+    this.element_.appendChild(track);
+    this.element_.appendChild(thumb);
+
+    this.boundMouseUpHandler = this.onMouseUp_.bind(this);
+
+    if (this.element_.classList.contains(
+        this.CssClasses_.RIPPLE_EFFECT)) {
+      this.element_.classList.add(
+          this.CssClasses_.RIPPLE_IGNORE_EVENTS);
+      this.rippleContainerElement_ = document.createElement('span');
+      this.rippleContainerElement_.classList.add(
+          this.CssClasses_.RIPPLE_CONTAINER);
+      this.rippleContainerElement_.classList.add(this.CssClasses_.RIPPLE_EFFECT);
+      this.rippleContainerElement_.classList.add(this.CssClasses_.RIPPLE_CENTER);
+      this.rippleContainerElement_.addEventListener('mouseup', this.boundMouseUpHandler);
+
+      var ripple = document.createElement('span');
+      ripple.classList.add(this.CssClasses_.RIPPLE);
+
+      this.rippleContainerElement_.appendChild(ripple);
+      this.element_.appendChild(this.rippleContainerElement_);
+    }
+
+    this.boundChangeHandler = this.onChange_.bind(this);
+    this.boundFocusHandler = this.onFocus_.bind(this);
+    this.boundBlurHandler = this.onBlur_.bind(this);
+
+    this.inputElement_.addEventListener('change', this.boundChangeHandler);
+    this.inputElement_.addEventListener('focus', this.boundFocusHandler);
+    this.inputElement_.addEventListener('blur', this.boundBlurHandler);
+    this.element_.addEventListener('mouseup', this.boundMouseUpHandler);
+
+    this.updateClasses_();
+    this.element_.classList.add('is-upgraded');
+  }
+};
+
+/*
+* Downgrade the component.
+*/
+ffSwitch.prototype.coreDowngrade_ = function() {
+  'use strict';
+  if (this.rippleContainerElement_) {
+    this.rippleContainerElement_.removeEventListener('mouseup', this.boundMouseUpHandler);
+  }
+  this.inputElement_.removeEventListener('change', this.boundChangeHandler);
+  this.inputElement_.removeEventListener('focus', this.boundFocusHandler);
+  this.inputElement_.removeEventListener('blur', this.boundBlurHandler);
+  this.element_.removeEventListener('mouseup', this.boundMouseUpHandler);
+};
+
+// The component registers itself. It can assume componentHandler is available
+// in the global scope.
+componentHandler.register({
+  constructor: ffSwitch,
+  classAsString: 'ffSwitch',
+  cssClass: 'js-switch',
+  widget: true
+});
+
+/**
+ * @license
+ * Copyright 2015 failcoder Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Class constructor for Tabs component.
+ * Implements component design pattern defined at:
+ * https://github.com/jasonmayes/component-design-pattern
+ * @param {HTMLElement} element The element that will be upgraded.
+ */
+function ffTabs(element) {
+  'use strict';
+
+  // Stores the HTML element.
+  this.element_ = element;
+
+  // Initialize instance.
+  this.init();
+}
+
+/**
+ * Store constants in one place so they can be updated easily.
+ * @enum {string}
+ * @private
+ */
+ffTabs.prototype.Constant_ = {
+  // None at the moment.
+};
+
+/**
+ * Store strings for class names defined by this component that are used in
+ * JavaScript. This allows us to simply change it in one place should we
+ * decide to modify at a later date.
+ * @enum {string}
+ * @private
+ */
+ffTabs.prototype.CssClasses_ = {
+  TAB_CLASS: 'tabs__tab',
+  PANEL_CLASS: 'tabs__panel',
+  ACTIVE_CLASS: 'is-active',
+  UPGRADED_CLASS: 'is-upgraded',
+
+  MDL_JS_RIPPLE_EFFECT: 'js-ripple-effect',
+  MDL_RIPPLE_CONTAINER: 'tabs-ripple',
+  MDL_RIPPLE: 'ripple',
+  MDL_JS_RIPPLE_EFFECT_IGNORE_EVENTS: 'js-ripple-effect--ignore-events'
+};
+
+/**
+ * Handle clicks to a tabs component
+ * @private
+ */
+ffTabs.prototype.initTabs_ = function(e) {
+  'use strict';
+
+  if (this.element_.classList.contains(this.CssClasses_.MDL_JS_RIPPLE_EFFECT)) {
+    this.element_.classList.add(
+      this.CssClasses_.MDL_JS_RIPPLE_EFFECT_IGNORE_EVENTS);
+  }
+
+  // Select element tabs, document panels
+  this.tabs_ = this.element_.querySelectorAll('.' + this.CssClasses_.TAB_CLASS);
+  this.panels_ =
+      this.element_.querySelectorAll('.' + this.CssClasses_.PANEL_CLASS);
+
+  // Create new tabs for each tab element
+  for (var i = 0; i < this.tabs_.length; i++) {
+    new ffTab(this.tabs_[i], this);
+  }
+
+  this.element_.classList.add(this.CssClasses_.UPGRADED_CLASS);
+};
+
+/**
+ * Reset tab state, dropping active classes
+ * @private
+ */
+ffTabs.prototype.resetTabState_ = function() {
+  'use strict';
+
+  for (var k = 0; k < this.tabs_.length; k++) {
+    this.tabs_[k].classList.remove(this.CssClasses_.ACTIVE_CLASS);
+  }
+};
+
+/**
+ * Reset panel state, droping active classes
+ * @private
+ */
+ffTabs.prototype.resetPanelState_ = function() {
+  'use strict';
+
+  for (var j = 0; j < this.panels_.length; j++) {
+    this.panels_[j].classList.remove(this.CssClasses_.ACTIVE_CLASS);
+  }
+};
+
+ffTabs.prototype.init = function() {
+  'use strict';
+
+  if (this.element_) {
+    this.initTabs_();
+  }
+};
+
+function ffTab(tab, ctx) {
+  'use strict';
+
+  if (tab) {
+    if (ctx.element_.classList.contains(ctx.CssClasses_.MDL_JS_RIPPLE_EFFECT)) {
+      var rippleContainer = document.createElement('span');
+      rippleContainer.classList.add(ctx.CssClasses_.MDL_RIPPLE_CONTAINER);
+      rippleContainer.classList.add(ctx.CssClasses_.MDL_JS_RIPPLE_EFFECT);
+      var ripple = document.createElement('span');
+      ripple.classList.add(ctx.CssClasses_.MDL_RIPPLE);
+      rippleContainer.appendChild(ripple);
+      tab.appendChild(rippleContainer);
+    }
+
+    tab.addEventListener('click', function(e) {
+      e.preventDefault();
+      var href = tab.href.split('#')[1];
+      var panel = ctx.element_.querySelector('#' + href);
+      ctx.resetTabState_();
+      ctx.resetPanelState_();
+      tab.classList.add(ctx.CssClasses_.ACTIVE_CLASS);
+      panel.classList.add(ctx.CssClasses_.ACTIVE_CLASS);
+    });
+
+  }
+}
+
+// The component registers itself. It can assume componentHandler is available
+// in the global scope.
+componentHandler.register({
+  constructor: ffTabs,
+  classAsString: 'ffTabs',
+  cssClass: 'js-tabs'
+});
+
+/**
+ * @license
+ * Copyright 2015 failcoder Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Class constructor for Textfield component.
+ * Implements component design pattern defined at:
+ * https://github.com/jasonmayes/component-design-pattern
+ * @param {HTMLElement} element The element that will be upgraded.
+ */
+function ffTextfield(element) {
+  'use strict';
+
+  this.element_ = element;
+  this.maxRows = this.Constant_.NO_MAX_ROWS;
+  // Initialize instance.
+  this.init();
+}
+
+/**
+ * Store constants in one place so they can be updated easily.
+ * @enum {string | number}
+ * @private
+ */
+ffTextfield.prototype.Constant_ = {
+  NO_MAX_ROWS: -1,
+  MAX_ROWS_ATTRIBUTE: 'maxrows'
+};
+
+/**
+ * Store strings for class names defined by this component that are used in
+ * JavaScript. This allows us to simply change it in one place should we
+ * decide to modify at a later date.
+ * @enum {string}
+ * @private
+ */
+ffTextfield.prototype.CssClasses_ = {
+  LABEL: 'textfield__label',
+  INPUT: 'textfield__input',
+  IS_DIRTY: 'is-dirty',
+  IS_FOCUSED: 'is-focused',
+  IS_DISABLED: 'is-disabled',
+  IS_INVALID: 'is-invalid',
+  IS_UPGRADED: 'is-upgraded'
+};
+
+/**
+ * Handle input being entered.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffTextfield.prototype.onKeyDown_ = function(event) {
+  'use strict';
+
+  var currentRowCount = event.target.value.split('\n').length;
+  if (event.keyCode === 13) {
+    if (currentRowCount >= this.maxRows) {
+      event.preventDefault();
+    }
+  }
+};
+
+/**
+ * Handle focus.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffTextfield.prototype.onFocus_ = function(event) {
+  'use strict';
+
+  this.element_.classList.add(this.CssClasses_.IS_FOCUSED);
+};
+
+/**
+ * Handle lost focus.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffTextfield.prototype.onBlur_ = function(event) {
+  'use strict';
+
+  this.element_.classList.remove(this.CssClasses_.IS_FOCUSED);
+};
+
+/**
+ * Handle class updates.
+ * @param {HTMLElement} button The button whose classes we should update.
+ * @param {HTMLElement} label The label whose classes we should update.
+ * @private
+ */
+ffTextfield.prototype.updateClasses_ = function() {
+  'use strict';
+  this.checkDisabled();
+  this.checkValidity();
+  this.checkDirty();
+};
+
+// Public methods.
+
+/**
+ * Check the disabled state and update field accordingly.
+ * @public
+ */
+ffTextfield.prototype.checkDisabled = function() {
+  'use strict';
+  if (this.input_.disabled) {
+    this.element_.classList.add(this.CssClasses_.IS_DISABLED);
+  } else {
+    this.element_.classList.remove(this.CssClasses_.IS_DISABLED);
+  }
+};
+
+/**
+ * Check the validity state and update field accordingly.
+ * @public
+ */
+ffTextfield.prototype.checkValidity = function() {
+  'use strict';
+  if (this.input_.validity.valid) {
+    this.element_.classList.remove(this.CssClasses_.IS_INVALID);
+  } else {
+    this.element_.classList.add(this.CssClasses_.IS_INVALID);
+  }
+};
+
+/**
+* Check the dirty state and update field accordingly.
+* @public
+*/
+ffTextfield.prototype.checkDirty = function() {
+  'use strict';
+  if (this.input_.value && this.input_.value.length > 0) {
+    this.element_.classList.add(this.CssClasses_.IS_DIRTY);
+  } else {
+    this.element_.classList.remove(this.CssClasses_.IS_DIRTY);
+  }
+};
+
+/**
+ * Disable text field.
+ * @public
+ */
+ffTextfield.prototype.disable = function() {
+  'use strict';
+
+  this.input_.disabled = true;
+  this.updateClasses_();
+};
+
+/**
+ * Enable text field.
+ * @public
+ */
+ffTextfield.prototype.enable = function() {
+  'use strict';
+
+  this.input_.disabled = false;
+  this.updateClasses_();
+};
+
+/**
+ * Update text field value.
+ * @param {String} value The value to which to set the control (optional).
+ * @public
+ */
+ffTextfield.prototype.change = function(value) {
+  'use strict';
+
+  if (value) {
+    this.input_.value = value;
+  }
+  this.updateClasses_();
+};
+
+/**
+ * Initialize element.
+ */
+ffTextfield.prototype.init = function() {
+  'use strict';
+
+  if (this.element_) {
+    this.label_ = this.element_.querySelector('.' + this.CssClasses_.LABEL);
+    this.input_ = this.element_.querySelector('.' + this.CssClasses_.INPUT);
+
+    if (this.input_) {
+      if (this.input_.hasAttribute(this.Constant_.MAX_ROWS_ATTRIBUTE)) {
+        this.maxRows = parseInt(this.input_.getAttribute(
+            this.Constant_.MAX_ROWS_ATTRIBUTE), 10);
+        if (isNaN(this.maxRows)) {
+          this.maxRows = this.Constant_.NO_MAX_ROWS;
+        }
       }
 
-      objPos = function (obj, top, right, bottom, left, width) {
-        return obj.css({
-          'top' : (top) ? top : 'auto',
-          'bottom' : (bottom) ? bottom : 'auto',
-          'left' : (left) ? left : 'auto',
-          'right' : (right) ? right : 'auto'
-        }).end();
+      this.boundUpdateClassesHandler = this.updateClasses_.bind(this);
+      this.boundFocusHandler = this.onFocus_.bind(this);
+      this.boundBlurHandler = this.onBlur_.bind(this);
+      this.input_.addEventListener('input', this.boundUpdateClassesHandler);
+      this.input_.addEventListener('focus', this.boundFocusHandler);
+      this.input_.addEventListener('blur', this.boundBlurHandler);
+
+      if (this.maxRows !== this.Constant_.NO_MAX_ROWS) {
+        // TODO: This should handle pasting multi line text.
+        // Currently doesn't.
+        this.boundKeyDownHandler = this.onKeyDown_.bind(this);
+        this.input_.addEventListener('keydown', this.boundKeyDownHandler);
+      }
+
+      this.updateClasses_();
+      this.element_.classList.add(this.CssClasses_.IS_UPGRADED);
+    }
+  }
+};
+
+/*
+* Downgrade the component
+*/
+ffTextfield.prototype.coreDowngrade_ = function() {
+  'use strict';
+  this.input_.removeEventListener('input', this.boundUpdateClassesHandler);
+  this.input_.removeEventListener('focus', this.boundFocusHandler);
+  this.input_.removeEventListener('blur', this.boundBlurHandler);
+  if (this.boundKeyDownHandler) {
+    this.input_.removeEventListener('keydown', this.boundKeyDownHandler);
+  }
+};
+
+// The component registers itself. It can assume componentHandler is available
+// in the global scope.
+componentHandler.register({
+  constructor: ffTextfield,
+  classAsString: 'ffTextfield',
+  cssClass: 'js-textfield',
+  widget: true
+});
+
+/**
+ * @license
+ * Copyright 2015 failcoder Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Class constructor for Tooltip component.
+ * Implements component design pattern defined at:
+ * https://github.com/jasonmayes/component-design-pattern
+ * @param {HTMLElement} element The element that will be upgraded.
+ */
+function ffTooltip(element) {
+  'use strict';
+
+  this.element_ = element;
+
+  // Initialize instance.
+  this.init();
+}
+
+/**
+ * Store constants in one place so they can be updated easily.
+ * @enum {string | number}
+ * @private
+ */
+ffTooltip.prototype.Constant_ = {
+  // None for now.
+};
+
+/**
+ * Store strings for class names defined by this component that are used in
+ * JavaScript. This allows us to simply change it in one place should we
+ * decide to modify at a later date.
+ * @enum {string}
+ * @private
+ */
+ffTooltip.prototype.CssClasses_ = {
+  IS_ACTIVE: 'is-active'
+};
+
+/**
+ * Handle mouseenter for tooltip.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffTooltip.prototype.handleMouseEnter_ = function(event) {
+  'use strict';
+
+  event.stopPropagation();
+  var props = event.target.getBoundingClientRect();
+  var left = props.left + (props.width / 2);
+  var marginLeft = -1 * (this.element_.offsetWidth / 2);
+
+  if (left + marginLeft < 0) {
+    this.element_.style.left = 0;
+    this.element_.style.marginLeft = 0;
+  } else {
+    this.element_.style.left = left + 'px';
+    this.element_.style.marginLeft = marginLeft + 'px';
+  }
+
+  this.element_.style.top = props.top + props.height + 10 + 'px';
+  this.element_.classList.add(this.CssClasses_.IS_ACTIVE);
+  window.addEventListener('scroll', this.boundMouseLeaveHandler, false);
+  window.addEventListener('touchmove', this.boundMouseLeaveHandler, false);
+};
+
+/**
+ * Handle mouseleave for tooltip.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffTooltip.prototype.handleMouseLeave_ = function(event) {
+  'use strict';
+
+  event.stopPropagation();
+  this.element_.classList.remove(this.CssClasses_.IS_ACTIVE);
+  window.removeEventListener('scroll', this.boundMouseLeaveHandler);
+  window.removeEventListener('touchmove', this.boundMouseLeaveHandler, false);
+};
+
+/**
+ * Initialize element.
+ */
+ffTooltip.prototype.init = function() {
+  'use strict';
+
+  if (this.element_) {
+    var forElId = this.element_.getAttribute('for');
+
+    if (forElId) {
+      this.forElement_ = document.getElementById(forElId);
+    }
+
+    if (this.forElement_) {
+      // Tabindex needs to be set for `blur` events to be emitted
+      if (!this.forElement_.getAttribute('tabindex')) {
+        this.forElement_.setAttribute('tabindex', '0');
+      }
+
+      this.boundMouseEnterHandler = this.handleMouseEnter_.bind(this);
+      this.boundMouseLeaveHandler = this.handleMouseLeave_.bind(this);
+      this.forElement_.addEventListener('mouseenter', this.boundMouseEnterHandler,
+          false);
+      this.forElement_.addEventListener('click', this.boundMouseEnterHandler,
+          false);
+      this.forElement_.addEventListener('blur', this.boundMouseLeaveHandler);
+      this.forElement_.addEventListener('touchstart', this.boundMouseEnterHandler,
+          false);
+      this.forElement_.addEventListener('mouseleave', this.boundMouseLeaveHandler);
+    }
+  }
+};
+
+/*
+* Downgrade the component
+*/
+ffTooltip.prototype.coreDowngrade_ = function() {
+  'use strict';
+  if (this.forElement_) {
+    this.forElement_.removeEventListener('mouseenter', this.boundMouseEnterHandler, false);
+    this.forElement_.removeEventListener('click', this.boundMouseEnterHandler, false);
+    this.forElement_.removeEventListener('touchstart', this.boundMouseEnterHandler, false);
+    this.forElement_.removeEventListener('mouseleave', this.boundMouseLeaveHandler);
+  }
+};
+
+// The component registers itself. It can assume componentHandler is available
+// in the global scope.
+componentHandler.register({
+  constructor: ffTooltip,
+  classAsString: 'ffTooltip',
+  cssClass: 'tooltip'
+});
+
+/**
+ * @license
+ * Copyright 2015 failcoder Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Class constructor for Layout component.
+ * Implements component design pattern defined at:
+ * https://github.com/jasonmayes/component-design-pattern
+ * @param {HTMLElement} element The element that will be upgraded.
+ */
+function ffLayout(element) {
+  'use strict';
+
+  this.element_ = element;
+
+  // Initialize instance.
+  this.init();
+}
+
+/**
+ * Store constants in one place so they can be updated easily.
+ * @enum {string | number}
+ * @private
+ */
+ffLayout.prototype.Constant_ = {
+  MAX_WIDTH: '(max-width: 1024px)',
+  TAB_SCROLL_PIXELS: 100,
+
+  MENU_ICON: 'menu',
+  CHEVRON_LEFT: 'chevron_left',
+  CHEVRON_RIGHT: 'chevron_right'
+};
+
+/**
+ * Modes.
+ * @enum {number}
+ * @private
+ */
+ffLayout.prototype.Mode_ = {
+  STANDARD: 0,
+  SEAMED: 1,
+  WATERFALL: 2,
+  SCROLL: 3
+};
+
+/**
+ * Store strings for class names defined by this component that are used in
+ * JavaScript. This allows us to simply change it in one place should we
+ * decide to modify at a later date.
+ * @enum {string}
+ * @private
+ */
+ffLayout.prototype.CssClasses_ = {
+  CONTAINER: 'layout-container',
+  HEADER: 'layout-header',
+  DRAWER: 'layout-drawer',
+  CONTENT: 'layout-content',
+  DRAWER_BTN: 'layout-drawer-button',
+  DRAWER_BTN_ICON: 'layout-drawer-button-icon',
+
+  MENU_ICON: 'material-icons',
+  ICON: 'material-icons',
+
+  JS_RIPPLE_EFFECT: 'js-ripple-effect',
+  RIPPLE_CONTAINER: 'layout-tab-ripple-container',
+  RIPPLE: 'ripple',
+  RIPPLE_IGNORE_EVENTS: 'js-ripple-effect--ignore-events',
+
+  HEADER_SEAMED: 'layout-header--seamed',
+  HEADER_WATERFALL: 'layout-header--waterfall',
+  HEADER_SCROLL: 'layout-header--scroll',
+
+  FIXED_HEADER: 'layout-fixed-header',
+  OBFUSCATOR: 'layout-obfuscator',
+
+  TAB_BAR: 'layout-tab-bar',
+  TAB_CONTAINER: 'layout-tab-bar-container',
+  TAB: 'layout-tab',
+  TAB_BAR_BUTTON: 'layout-tab-bar-button',
+  TAB_BAR_LEFT_BUTTON: 'layout-tab-bar-left-button',
+  TAB_BAR_RIGHT_BUTTON: 'layout-tab-bar-right-button',
+  PANEL: 'layout-tab-panel',
+
+  HAS_DRAWER: 'has-drawer',
+  HAS_TABS: 'has-tabs',
+  HAS_SCROLLING_HEADER: 'has-scrolling-header',
+  CASTING_SHADOW: 'is-casting-shadow',
+  IS_COMPACT: 'is-compact',
+  IS_SMALL_SCREEN: 'is-small-screen',
+  IS_DRAWER_OPEN: 'is-visible',
+  IS_ACTIVE: 'is-active',
+  IS_UPGRADED: 'is-upgraded',
+  IS_ANIMATING: 'is-animating',
+
+  ON_LARGE_SCREEN : 'layout-large-screen-only',
+  ON_SMALL_SCREEN  : 'layout-small-screen-only'
+
+};
+
+/**
+ * Handles scrolling on the content.
+ * @private
+ */
+ffLayout.prototype.contentScrollHandler_ = function() {
+  'use strict';
+
+  if (this.header_.classList.contains(this.CssClasses_.IS_ANIMATING)) {
+    return;
+  }
+
+  if (this.content_.scrollTop > 0 &&
+      !this.header_.classList.contains(this.CssClasses_.IS_COMPACT)) {
+    this.header_.classList.add(this.CssClasses_.CASTING_SHADOW);
+    this.header_.classList.add(this.CssClasses_.IS_COMPACT);
+    this.header_.classList.add(this.CssClasses_.IS_ANIMATING);
+  } else if (this.content_.scrollTop <= 0 &&
+      this.header_.classList.contains(this.CssClasses_.IS_COMPACT)) {
+    this.header_.classList.remove(this.CssClasses_.CASTING_SHADOW);
+    this.header_.classList.remove(this.CssClasses_.IS_COMPACT);
+    this.header_.classList.add(this.CssClasses_.IS_ANIMATING);
+  }
+};
+
+/**
+ * Handles changes in screen size.
+ * @private
+ */
+ffLayout.prototype.screenSizeHandler_ = function() {
+  'use strict';
+
+  if (this.screenSizeMediaQuery_.matches) {
+    this.element_.classList.add(this.CssClasses_.IS_SMALL_SCREEN);
+  } else {
+    this.element_.classList.remove(this.CssClasses_.IS_SMALL_SCREEN);
+    // Collapse drawer (if any) when moving to a large screen size.
+    if (this.drawer_) {
+      this.drawer_.classList.remove(this.CssClasses_.IS_DRAWER_OPEN);
+    }
+  }
+};
+
+/**
+ * Handles toggling of the drawer.
+ * @param {Element} drawer The drawer container element.
+ * @private
+ */
+ffLayout.prototype.drawerToggleHandler_ = function() {
+  'use strict';
+
+  this.drawer_.classList.toggle(this.CssClasses_.IS_DRAWER_OPEN);
+};
+
+/**
+ * Handles (un)setting the `is-animating` class
+ */
+ffLayout.prototype.headerTransitionEndHandler = function() {
+  'use strict';
+
+  this.header_.classList.remove(this.CssClasses_.IS_ANIMATING);
+};
+
+/**
+ * Handles expanding the header on click
+ */
+ffLayout.prototype.headerClickHandler = function() {
+  'use strict';
+
+  if (this.header_.classList.contains(this.CssClasses_.IS_COMPACT)) {
+    this.header_.classList.remove(this.CssClasses_.IS_COMPACT);
+    this.header_.classList.add(this.CssClasses_.IS_ANIMATING);
+  }
+};
+
+/**
+ * Reset tab state, dropping active classes
+ * @private
+ */
+ffLayout.prototype.resetTabState_ = function(tabBar) {
+  'use strict';
+
+  for (var k = 0; k < tabBar.length; k++) {
+    tabBar[k].classList.remove(this.CssClasses_.IS_ACTIVE);
+  }
+};
+
+/**
+ * Reset panel state, droping active classes
+ * @private
+ */
+ffLayout.prototype.resetPanelState_ = function(panels) {
+  'use strict';
+
+  for (var j = 0; j < panels.length; j++) {
+    panels[j].classList.remove(this.CssClasses_.IS_ACTIVE);
+  }
+};
+
+/**
+ * Initialize element.
+ */
+ffLayout.prototype.init = function() {
+  'use strict';
+
+  if (this.element_) {
+    var container = document.createElement('div');
+    container.classList.add(this.CssClasses_.CONTAINER);
+    this.element_.parentElement.insertBefore(container, this.element_);
+    this.element_.parentElement.removeChild(this.element_);
+    container.appendChild(this.element_);
+
+    var directChildren = this.element_.childNodes;
+    for (var c = 0; c < directChildren.length; c++) {
+      var child = directChildren[c];
+      if (child.classList &&
+          child.classList.contains(this.CssClasses_.HEADER)) {
+        this.header_ = child;
+      }
+
+      if (child.classList &&
+          child.classList.contains(this.CssClasses_.DRAWER)) {
+        this.drawer_ = child;
+      }
+
+      if (child.classList &&
+          child.classList.contains(this.CssClasses_.DRAWER_BTN)) {
+        this.drawerButton_ = child;
+      }
+
+      if (child.classList &&
+          child.classList.contains(this.CssClasses_.DRAWER_BTN_ICON)) {
+        this.drawerButtonIcon_ = child;
+      }
+
+      if (child.classList &&
+          child.classList.contains(this.CssClasses_.CONTENT)) {
+        this.content_ = child;
+      }
+    }
+
+    if (this.header_) {
+      this.tabBar_ = this.header_.querySelector('.' + this.CssClasses_.TAB_BAR);
+    }
+
+    var mode = this.Mode_.STANDARD;
+
+    // Keep an eye on screen size, and add/remove auxiliary class for styling
+    // of small screens.
+    this.screenSizeMediaQuery_ = window.matchMedia(this.Constant_.MAX_WIDTH);
+    this.screenSizeMediaQuery_.addListener(this.screenSizeHandler_.bind(this));
+    this.screenSizeHandler_();
+
+    if (this.header_) {
+      if (this.header_.classList.contains(this.CssClasses_.HEADER_SEAMED)) {
+        mode = this.Mode_.SEAMED;
+      } else if (this.header_.classList.contains(
+          this.CssClasses_.HEADER_WATERFALL)) {
+        mode = this.Mode_.WATERFALL;
+        this.header_.addEventListener('transitionend',
+          this.headerTransitionEndHandler.bind(this));
+        this.header_.addEventListener('click',
+          this.headerClickHandler.bind(this));
+      } else if (this.header_.classList.contains(
+          this.CssClasses_.HEADER_SCROLL)) {
+        mode = this.Mode_.SCROLL;
+        container.classList.add(this.CssClasses_.HAS_SCROLLING_HEADER);
+      }
+
+      if (mode === this.Mode_.STANDARD) {
+        this.header_.classList.add(this.CssClasses_.CASTING_SHADOW);
+        if (this.tabBar_) {
+          this.tabBar_.classList.add(this.CssClasses_.CASTING_SHADOW);
+        }
+      } else if (mode === this.Mode_.SEAMED || mode === this.Mode_.SCROLL) {
+        this.header_.classList.remove(this.CssClasses_.CASTING_SHADOW);
+        if (this.tabBar_) {
+          this.tabBar_.classList.remove(this.CssClasses_.CASTING_SHADOW);
+        }
+      } else if (mode === this.Mode_.WATERFALL) {
+        // Add and remove shadows depending on scroll position.
+        // Also add/remove auxiliary class for styling of the compact version of
+        // the header.
+        this.content_.addEventListener('scroll',
+            this.contentScrollHandler_.bind(this));
+        this.contentScrollHandler_();
+      }
+    }
+
+    // Add drawer toggling button to our layout, if we have an openable drawer.
+    if (this.drawer_) {
+      var drawerButton = this.drawerButton_ || document.createElement('div');
+      drawerButton.classList.add(this.CssClasses_.DRAWER_BTN);
+
+      if (this.drawer_.classList.contains(this.CssClasses_.ON_LARGE_SCREEN)) {
+        //If drawer has ON_LARGE_SCREEN class then add it to the drawer toggle button as well.
+        drawerButton.classList.add(this.CssClasses_.ON_LARGE_SCREEN);
+      } else if (this.drawer_.classList.contains(this.CssClasses_.ON_SMALL_SCREEN)) {
+        //If drawer has ON_SMALL_SCREEN class then add it to the drawer toggle button as well.
+        drawerButton.classList.add(this.CssClasses_.ON_SMALL_SCREEN);
+      }
+
+      if (!this.drawerButtonIcon_) {
+        var drawerButtonIcon = document.createElement('i');
+        drawerButtonIcon.classList.add(this.CssClasses_.MENU_ICON);
+        drawerButtonIcon.textContent = this.Constant_.MENU_ICON;
+        drawerButton.appendChild(drawerButtonIcon);
+      }
+      drawerButton.addEventListener('click',
+          this.drawerToggleHandler_.bind(this));
+
+      // Add a class if the layout has a drawer, for altering the left padding.
+      // Adds the HAS_DRAWER to the elements since this.header_ may or may
+      // not be present.
+      this.element_.classList.add(this.CssClasses_.HAS_DRAWER);
+
+      // If we have a fixed header, add the button to the header rather than
+      // the layout.
+      if (this.element_.classList.contains(this.CssClasses_.FIXED_HEADER)) {
+        this.header_.insertBefore(drawerButton, this.header_.firstChild);
+      } else {
+        this.element_.insertBefore(drawerButton, this.content_);
+      }
+
+      var obfuscator = document.createElement('div');
+      obfuscator.classList.add(this.CssClasses_.OBFUSCATOR);
+      this.element_.appendChild(obfuscator);
+      obfuscator.addEventListener('click',
+          this.drawerToggleHandler_.bind(this));
+    }
+
+    // Initialize tabs, if any.
+    if (this.header_ && this.tabBar_) {
+      this.element_.classList.add(this.CssClasses_.HAS_TABS);
+
+      var tabContainer = document.createElement('div');
+      tabContainer.classList.add(this.CssClasses_.TAB_CONTAINER);
+      this.header_.insertBefore(tabContainer, this.tabBar_);
+      this.header_.removeChild(this.tabBar_);
+
+      var leftButton = document.createElement('div');
+      leftButton.classList.add(this.CssClasses_.TAB_BAR_BUTTON);
+      leftButton.classList.add(this.CssClasses_.TAB_BAR_LEFT_BUTTON);
+      var leftButtonIcon = document.createElement('i');
+      leftButtonIcon.classList.add(this.CssClasses_.ICON);
+      leftButtonIcon.textContent = this.Constant_.CHEVRON_LEFT;
+      leftButton.appendChild(leftButtonIcon);
+      leftButton.addEventListener('click', function() {
+        this.tabBar_.scrollLeft -= this.Constant_.TAB_SCROLL_PIXELS;
+      }.bind(this));
+
+      var rightButton = document.createElement('div');
+      rightButton.classList.add(this.CssClasses_.TAB_BAR_BUTTON);
+      rightButton.classList.add(this.CssClasses_.TAB_BAR_RIGHT_BUTTON);
+      var rightButtonIcon = document.createElement('i');
+      rightButtonIcon.classList.add(this.CssClasses_.ICON);
+      rightButtonIcon.textContent = this.Constant_.CHEVRON_RIGHT;
+      rightButton.appendChild(rightButtonIcon);
+      rightButton.addEventListener('click', function() {
+        this.tabBar_.scrollLeft += this.Constant_.TAB_SCROLL_PIXELS;
+      }.bind(this));
+
+      tabContainer.appendChild(leftButton);
+      tabContainer.appendChild(this.tabBar_);
+      tabContainer.appendChild(rightButton);
+
+      // Add and remove buttons depending on scroll position.
+      var tabScrollHandler = function() {
+        if (this.tabBar_.scrollLeft > 0) {
+          leftButton.classList.add(this.CssClasses_.IS_ACTIVE);
+        } else {
+          leftButton.classList.remove(this.CssClasses_.IS_ACTIVE);
+        }
+
+        if (this.tabBar_.scrollLeft <
+            this.tabBar_.scrollWidth - this.tabBar_.offsetWidth) {
+          rightButton.classList.add(this.CssClasses_.IS_ACTIVE);
+        } else {
+          rightButton.classList.remove(this.CssClasses_.IS_ACTIVE);
+        }
+      }.bind(this);
+
+      this.tabBar_.addEventListener('scroll', tabScrollHandler);
+      tabScrollHandler();
+
+      if (this.tabBar_.classList.contains(this.CssClasses_.JS_RIPPLE_EFFECT)) {
+        this.tabBar_.classList.add(this.CssClasses_.RIPPLE_IGNORE_EVENTS);
+      }
+
+      // Select element tabs, document panels
+      var tabs = this.tabBar_.querySelectorAll('.' + this.CssClasses_.TAB);
+      var panels = this.content_.querySelectorAll('.' + this.CssClasses_.PANEL);
+
+      // Create new tabs for each tab element
+      for (var i = 0; i < tabs.length; i++) {
+        new ffLayoutTab(tabs[i], tabs, panels, this);
+      }
+    }
+
+    this.element_.classList.add(this.CssClasses_.IS_UPGRADED);
+  }
+};
+
+function ffLayoutTab(tab, tabs, panels, layout) {
+  'use strict';
+
+  if (tab) {
+    if (layout.tabBar_.classList.contains(
+        layout.CssClasses_.JS_RIPPLE_EFFECT)) {
+      var rippleContainer = document.createElement('span');
+      rippleContainer.classList.add(layout.CssClasses_.RIPPLE_CONTAINER);
+      rippleContainer.classList.add(layout.CssClasses_.JS_RIPPLE_EFFECT);
+      var ripple = document.createElement('span');
+      ripple.classList.add(layout.CssClasses_.RIPPLE);
+      rippleContainer.appendChild(ripple);
+      tab.appendChild(rippleContainer);
+    }
+
+    tab.addEventListener('click', function(e) {
+      e.preventDefault();
+      var href = tab.href.split('#')[1];
+      var panel = layout.content_.querySelector('#' + href);
+      layout.resetTabState_(tabs);
+      layout.resetPanelState_(panels);
+      tab.classList.add(layout.CssClasses_.IS_ACTIVE);
+      panel.classList.add(layout.CssClasses_.IS_ACTIVE);
+    });
+
+  }
+}
+
+// The component registers itself. It can assume componentHandler is available
+// in the global scope.
+componentHandler.register({
+  constructor: ffLayout,
+  classAsString: 'ffLayout',
+  cssClass: 'js-layout'
+});
+
+/**
+ * @license
+ * Copyright 2015 failcoder Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Class constructor for Data Table Card component.
+ * Implements component design pattern defined at:
+ * https://github.com/jasonmayes/component-design-pattern
+ * @param {HTMLElement} element The element that will be upgraded.
+ */
+function ffDataTable(element) {
+  'use strict';
+
+  this.element_ = element;
+
+  // Initialize instance.
+  this.init();
+}
+
+/**
+ * Store constants in one place so they can be updated easily.
+ * @enum {string | number}
+ * @private
+ */
+ffDataTable.prototype.Constant_ = {
+  // None at the moment.
+};
+
+/**
+ * Store strings for class names defined by this component that are used in
+ * JavaScript. This allows us to simply change it in one place should we
+ * decide to modify at a later date.
+ * @enum {string}
+ * @private
+ */
+ffDataTable.prototype.CssClasses_ = {
+  DATA_TABLE: 'datatable',
+  SELECTABLE: 'datatable--selectable',
+  IS_SELECTED: 'is-selected',
+  IS_UPGRADED: 'is-upgraded'
+};
+
+ffDataTable.prototype.selectRow_ = function(checkbox, row, rows) {
+  'use strict';
+
+  if (row) {
+    return function() {
+      if (checkbox.checked) {
+        row.classList.add(this.CssClasses_.IS_SELECTED);
+      } else {
+        row.classList.remove(this.CssClasses_.IS_SELECTED);
+      }
+    }.bind(this);
+  }
+
+  if (rows) {
+    return function() {
+      var i;
+      var el;
+      if (checkbox.checked) {
+        for (i = 0; i < rows.length; i++) {
+          el = rows[i].querySelector('td').querySelector('.checkbox');
+          el.ffCheckbox.check();
+          rows[i].classList.add(this.CssClasses_.IS_SELECTED);
+        }
+      } else {
+        for (i = 0; i < rows.length; i++) {
+          el = rows[i].querySelector('td').querySelector('.checkbox');
+          el.ffCheckbox.uncheck();
+          rows[i].classList.remove(this.CssClasses_.IS_SELECTED);
+        }
+      }
+    }.bind(this);
+  }
+};
+
+ffDataTable.prototype.createCheckbox_ = function(row, rows) {
+  'use strict';
+
+  var label = document.createElement('label');
+  label.classList.add('checkbox');
+  label.classList.add('js-checkbox');
+  label.classList.add('js-ripple-effect');
+  label.classList.add('datatable-select');
+  var checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.classList.add('checkbox-input');
+  if (row) {
+    checkbox.addEventListener('change', this.selectRow_(checkbox, row));
+  } else if (rows) {
+    checkbox.addEventListener('change', this.selectRow_(checkbox, null, rows));
+  }
+  label.appendChild(checkbox);
+  componentHandler.upgradeElement(label, 'ffCheckbox');
+  return label;
+};
+
+/**
+ * Initialize element.
+ */
+ffDataTable.prototype.init = function() {
+  'use strict';
+
+  if (this.element_) {
+
+    var firstHeader = this.element_.querySelector('th');
+    var rows = this.element_.querySelector('tbody').querySelectorAll('tr');
+
+    if (this.element_.classList.contains(this.CssClasses_.SELECTABLE)) {
+      var th = document.createElement('th');
+      var headerCheckbox = this.createCheckbox_(null, rows);
+      th.appendChild(headerCheckbox);
+      firstHeader.parentElement.insertBefore(th, firstHeader);
+
+      for (var i = 0; i < rows.length; i++) {
+        var firstCell = rows[i].querySelector('td');
+        if (firstCell) {
+          var td = document.createElement('td');
+          var rowCheckbox = this.createCheckbox_(rows[i]);
+          td.appendChild(rowCheckbox);
+          rows[i].insertBefore(td, firstCell);
+        }
+      }
+    }
+
+    this.element_.classList.add(this.CssClasses_.IS_UPGRADED);
+  }
+};
+
+// The component registers itself. It can assume componentHandler is available
+// in the global scope.
+componentHandler.register({
+  constructor: ffDataTable,
+  classAsString: 'ffDataTable',
+  cssClass: 'js-data-table'
+});
+
+/**
+ * @license
+ * Copyright 2015 failcoder Inc. All Rights Reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Class constructor for Ripple component.
+ * Implements component design pattern defined at:
+ * https://github.com/jasonmayes/component-design-pattern
+ * @param {HTMLElement} element The element that will be upgraded.
+ */
+function ffRipple(element) {
+  'use strict';
+
+  this.element_ = element;
+
+  // Initialize instance.
+  this.init();
+}
+
+/**
+ * Store constants in one place so they can be updated easily.
+ * @enum {string | number}
+ * @private
+ */
+ffRipple.prototype.Constant_ = {
+  INITIAL_SCALE: 'scale(0.0001, 0.0001)',
+  INITIAL_SIZE: '1px',
+  INITIAL_OPACITY: '0.4',
+  FINAL_OPACITY: '0',
+  FINAL_SCALE: ''
+};
+
+/**
+ * Store strings for class names defined by this component that are used in
+ * JavaScript. This allows us to simply change it in one place should we
+ * decide to modify at a later date.
+ * @enum {string}
+ * @private
+ */
+ffRipple.prototype.CssClasses_ = {
+  RIPPLE_CENTER: 'ripple--center',
+  RIPPLE_EFFECT_IGNORE_EVENTS: 'js-ripple-effect--ignore-events',
+  RIPPLE: 'ripple',
+  IS_ANIMATING: 'is-animating',
+  IS_VISIBLE: 'is-visible'
+};
+
+/**
+ * Handle mouse / finger down on element.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffRipple.prototype.downHandler_ = function(event) {
+  'use strict';
+
+  if (!this.rippleElement_.style.width && !this.rippleElement_.style.height) {
+    var rect = this.element_.getBoundingClientRect();
+    this.boundHeight = rect.height;
+    this.boundWidth = rect.width;
+    this.rippleSize_ = Math.sqrt(rect.width * rect.width +
+        rect.height * rect.height) * 2 + 2;
+    this.rippleElement_.style.width = this.rippleSize_ + 'px';
+    this.rippleElement_.style.height = this.rippleSize_ + 'px';
+  }
+
+  this.rippleElement_.classList.add(this.CssClasses_.IS_VISIBLE);
+
+  if (event.type === 'mousedown' && this.ignoringMouseDown_) {
+    this.ignoringMouseDown_ = false;
+  } else {
+    if (event.type === 'touchstart') {
+      this.ignoringMouseDown_ = true;
+    }
+    var frameCount = this.getFrameCount();
+    if (frameCount > 0) {
+      return;
+    }
+    this.setFrameCount(1);
+    var bound = event.currentTarget.getBoundingClientRect();
+    var x;
+    var y;
+    // Check if we are handling a keyboard click.
+    if (event.clientX === 0 && event.clientY === 0) {
+      x = Math.round(bound.width / 2);
+      y = Math.round(bound.height / 2);
+    } else {
+      var clientX = event.clientX ? event.clientX : event.touches[0].clientX;
+      var clientY = event.clientY ? event.clientY : event.touches[0].clientY;
+      x = Math.round(clientX - bound.left);
+      y = Math.round(clientY - bound.top);
+    }
+    this.setRippleXY(x, y);
+    this.setRippleStyles(true);
+    window.requestAnimationFrame(this.animFrameHandler.bind(this));
+  }
+};
+
+/**
+ * Handle mouse / finger up on element.
+ * @param {Event} event The event that fired.
+ * @private
+ */
+ffRipple.prototype.upHandler_ = function(event) {
+  'use strict';
+
+  // Don't fire for the artificial "mouseup" generated by a double-click.
+  if (event && event.detail !== 2) {
+    this.rippleElement_.classList.remove(this.CssClasses_.IS_VISIBLE);
+  }
+};
+
+/**
+ * Initialize element.
+ */
+ffRipple.prototype.init = function() {
+  'use strict';
+
+  if (this.element_) {
+    var recentering =
+        this.element_.classList.contains(this.CssClasses_.RIPPLE_CENTER);
+    if (!this.element_.classList.contains(
+        this.CssClasses_.RIPPLE_EFFECT_IGNORE_EVENTS)) {
+      this.rippleElement_ = this.element_.querySelector('.' +
+          this.CssClasses_.RIPPLE);
+      this.frameCount_ = 0;
+      this.rippleSize_ = 0;
+      this.x_ = 0;
+      this.y_ = 0;
+
+      // Touch start produces a compat mouse down event, which would cause a
+      // second ripples. To avoid that, we use this property to ignore the first
+      // mouse down after a touch start.
+      this.ignoringMouseDown_ = false;
+
+      this.boundDownHandler = this.downHandler_.bind(this);
+      this.element_.addEventListener('mousedown',
+        this.boundDownHandler);
+      this.element_.addEventListener('touchstart',
+          this.boundDownHandler);
+
+      this.boundUpHandler = this.upHandler_.bind(this);
+      this.element_.addEventListener('mouseup', this.boundUpHandler);
+      this.element_.addEventListener('mouseleave', this.boundUpHandler);
+      this.element_.addEventListener('touchend', this.boundUpHandler);
+      this.element_.addEventListener('blur', this.boundUpHandler);
+
+      this.getFrameCount = function() {
+        return this.frameCount_;
       };
 
-      objPos(tip, (target.offset().top + target.outerHeight() + 10), 'auto', 'auto', target.offset().left);
+      this.setFrameCount = function(fC) {
+        this.frameCount_ = fC;
+      };
 
-      if (this.small()) {
-        objPos(tip, (target.offset().top + target.outerHeight() + 10), 'auto', 'auto', 12.5, $(this.scope).width());
-        tip.addClass('tip-override');
-        objPos(nub, -nubHeight, 'auto', 'auto', target.offset().left);
-      } else {
-        var left = target.offset().left;
-        if (Foundation.rtl) {
-          nub.addClass('rtl');
-          left = target.offset().left + target.outerWidth() - tip.outerWidth();
-        }
+      this.getRippleElement = function() {
+        return this.rippleElement_;
+      };
 
-        objPos(tip, (target.offset().top + target.outerHeight() + 10), 'auto', 'auto', left);
-        // reset nub from small styles, if they've been applied
-        if (nub.attr('style')) {
-          nub.removeAttr('style');
-        }
-        
-        tip.removeClass('tip-override');
-        if (classes && classes.indexOf('tip-top') > -1) {
-          if (Foundation.rtl) {
-            nub.addClass('rtl');
-          }
-          objPos(tip, (target.offset().top - tip.outerHeight()), 'auto', 'auto', left)
-            .removeClass('tip-override');
-        } else if (classes && classes.indexOf('tip-left') > -1) {
-          objPos(tip, (target.offset().top + (target.outerHeight() / 2) - (tip.outerHeight() / 2)), 'auto', 'auto', (target.offset().left - tip.outerWidth() - nubHeight))
-            .removeClass('tip-override');
-          nub.removeClass('rtl');
-        } else if (classes && classes.indexOf('tip-right') > -1) {
-          objPos(tip, (target.offset().top + (target.outerHeight() / 2) - (tip.outerHeight() / 2)), 'auto', 'auto', (target.offset().left + target.outerWidth() + nubHeight))
-            .removeClass('tip-override');
-          nub.removeClass('rtl');
-        }
-      }
+      this.setRippleXY = function(newX, newY) {
+        this.x_ = newX;
+        this.y_ = newY;
+      };
 
-      tip.css('visibility', 'visible').hide();
-    },
+      this.setRippleStyles = function(start) {
+        if (this.rippleElement_ !== null) {
+          var transformString;
+          var scale;
+          var size;
+          var offset = 'translate(' + this.x_ + 'px, ' + this.y_ + 'px)';
 
-    small : function () {
-      return matchMedia(Foundation.media_queries.small).matches &&
-        !matchMedia(Foundation.media_queries.medium).matches;
-    },
-
-    inheritable_classes : function ($target) {
-      var settings = $.extend({}, this.settings, this.data_options($target)),
-          inheritables = ['tip-top', 'tip-left', 'tip-bottom', 'tip-right', 'radius', 'round'].concat(settings.additional_inheritable_classes),
-          classes = $target.attr('class'),
-          filtered = classes ? $.map(classes.split(' '), function (el, i) {
-            if ($.inArray(el, inheritables) !== -1) {
-              return el;
+          if (start) {
+            scale = this.Constant_.INITIAL_SCALE;
+            size = this.Constant_.INITIAL_SIZE;
+          } else {
+            scale = this.Constant_.FINAL_SCALE;
+            size = this.rippleSize_ + 'px';
+            if (recentering) {
+              offset = 'translate(' + this.boundWidth / 2 + 'px, ' +
+                this.boundHeight / 2 + 'px)';
             }
-          }).join(' ') : '';
+          }
 
-      return $.trim(filtered);
-    },
+          transformString = 'translate(-50%, -50%) ' + offset + scale;
 
-    convert_to_touch : function ($target) {
-      var self = this,
-          $tip = self.getTip($target),
-          settings = $.extend({}, self.settings, self.data_options($target));
+          this.rippleElement_.style.webkitTransform = transformString;
+          this.rippleElement_.style.msTransform = transformString;
+          this.rippleElement_.style.transform = transformString;
 
-      if ($tip.find('.tap-to-close').length === 0) {
-        $tip.append('<span class="tap-to-close">' + settings.touch_close_text + '</span>');
-        $tip.on('click.fndtn.tooltip.tapclose touchstart.fndtn.tooltip.tapclose MSPointerDown.fndtn.tooltip.tapclose', function (e) {
-          self.hide($target);
-        });
-      }
+          if (start) {
+            this.rippleElement_.classList.remove(this.CssClasses_.IS_ANIMATING);
+          } else {
+            this.rippleElement_.classList.add(this.CssClasses_.IS_ANIMATING);
+          }
+        }
+      };
 
-      $target.data('tooltip-open-event-type', 'touch');
-    },
+      this.animFrameHandler = function() {
+        if (this.frameCount_-- > 0) {
+          window.requestAnimationFrame(this.animFrameHandler.bind(this));
+        } else {
+          this.setRippleStyles(false);
+        }
+      };
+    }
+  }
+};
 
-    show : function ($target) {
-      var $tip = this.getTip($target);
-
-      if ($target.data('tooltip-open-event-type') == 'touch') {
-        this.convert_to_touch($target);
-      }
-
-      this.reposition($target, $tip, $target.attr('class'));
-      $target.addClass('open');
-      $tip.fadeIn(150);
-    },
-
-    hide : function ($target) {
-      var $tip = this.getTip($target);
-      $tip.fadeOut(150, function () {
-        $tip.find('.tap-to-close').remove();
-        $tip.off('click.fndtn.tooltip.tapclose MSPointerDown.fndtn.tapclose');
-        $target.removeClass('open');
-      });
-    },
-
-    off : function () {
-      var self = this;
-      this.S(this.scope).off('.fndtn.tooltip');
-      this.S(this.settings.tooltip_class).each(function (i) {
-        $('[' + self.attr_name() + ']').eq(i).attr('title', $(this).text());
-      }).remove();
-    },
-
-    reflow : function () {}
-  };
-}(jQuery, window, window.document));
-;;(function ($, window, document, undefined) {
+/*
+* Downgrade the component
+*/
+ffRipple.prototype.coreDowngrade_ = function() {
   'use strict';
-
-  Foundation.libs.topbar = {
-    name : 'topbar',
-
-    version : '5.5.2',
-
-    settings : {
-      index : 0,
-      start_offset : 0,
-      sticky_class : 'sticky',
-      custom_back_text : true,
-      back_text : 'Back',
-      mobile_show_parent_link : true,
-      is_hover : true,
-      scrolltop : true, // jump to top when sticky nav menu toggle is clicked
-      sticky_on : 'all',
-      dropdown_autoclose: true
-    },
-
-    init : function (section, method, options) {
-      Foundation.inherit(this, 'add_custom_rule register_media throttle');
-      var self = this;
-
-      self.register_media('topbar', 'foundation-mq-topbar');
-
-      this.bindings(method, options);
-
-      self.S('[' + this.attr_name() + ']', this.scope).each(function () {
-        var topbar = $(this),
-            settings = topbar.data(self.attr_name(true) + '-init'),
-            section = self.S('section, .top-bar-section', this);
-        topbar.data('index', 0);
-        var topbarContainer = topbar.parent();
-        if (topbarContainer.hasClass('fixed') || self.is_sticky(topbar, topbarContainer, settings) ) {
-          self.settings.sticky_class = settings.sticky_class;
-          self.settings.sticky_topbar = topbar;
-          topbar.data('height', topbarContainer.outerHeight());
-          topbar.data('stickyoffset', topbarContainer.offset().top);
-        } else {
-          topbar.data('height', topbar.outerHeight());
-        }
-
-        if (!settings.assembled) {
-          self.assemble(topbar);
-        }
-
-        if (settings.is_hover) {
-          self.S('.has-dropdown', topbar).addClass('not-click');
-        } else {
-          self.S('.has-dropdown', topbar).removeClass('not-click');
-        }
-
-        // Pad body when sticky (scrolled) or fixed.
-        self.add_custom_rule('.f-topbar-fixed { padding-top: ' + topbar.data('height') + 'px }');
-
-        if (topbarContainer.hasClass('fixed')) {
-          self.S('body').addClass('f-topbar-fixed');
-        }
-      });
-
-    },
-
-    is_sticky : function (topbar, topbarContainer, settings) {
-      var sticky     = topbarContainer.hasClass(settings.sticky_class);
-      var smallMatch = matchMedia(Foundation.media_queries.small).matches;
-      var medMatch   = matchMedia(Foundation.media_queries.medium).matches;
-      var lrgMatch   = matchMedia(Foundation.media_queries.large).matches;
-
-      if (sticky && settings.sticky_on === 'all') {
-        return true;
-      }
-      if (sticky && this.small() && settings.sticky_on.indexOf('small') !== -1) {
-        if (smallMatch && !medMatch && !lrgMatch) { return true; }
-      }
-      if (sticky && this.medium() && settings.sticky_on.indexOf('medium') !== -1) {
-        if (smallMatch && medMatch && !lrgMatch) { return true; }
-      }
-      if (sticky && this.large() && settings.sticky_on.indexOf('large') !== -1) {
-        if (smallMatch && medMatch && lrgMatch) { return true; }
-      }
-
-       return false;
-    },
-
-    toggle : function (toggleEl) {
-      var self = this,
-          topbar;
-
-      if (toggleEl) {
-        topbar = self.S(toggleEl).closest('[' + this.attr_name() + ']');
-      } else {
-        topbar = self.S('[' + this.attr_name() + ']');
-      }
-
-      var settings = topbar.data(this.attr_name(true) + '-init');
-
-      var section = self.S('section, .top-bar-section', topbar);
-
-      if (self.breakpoint()) {
-        if (!self.rtl) {
-          section.css({left : '0%'});
-          $('>.name', section).css({left : '100%'});
-        } else {
-          section.css({right : '0%'});
-          $('>.name', section).css({right : '100%'});
-        }
-
-        self.S('li.moved', section).removeClass('moved');
-        topbar.data('index', 0);
-
-        topbar
-          .toggleClass('expanded')
-          .css('height', '');
-      }
-
-      if (settings.scrolltop) {
-        if (!topbar.hasClass('expanded')) {
-          if (topbar.hasClass('fixed')) {
-            topbar.parent().addClass('fixed');
-            topbar.removeClass('fixed');
-            self.S('body').addClass('f-topbar-fixed');
-          }
-        } else if (topbar.parent().hasClass('fixed')) {
-          if (settings.scrolltop) {
-            topbar.parent().removeClass('fixed');
-            topbar.addClass('fixed');
-            self.S('body').removeClass('f-topbar-fixed');
-
-            window.scrollTo(0, 0);
-          } else {
-            topbar.parent().removeClass('expanded');
-          }
-        }
-      } else {
-        if (self.is_sticky(topbar, topbar.parent(), settings)) {
-          topbar.parent().addClass('fixed');
-        }
-
-        if (topbar.parent().hasClass('fixed')) {
-          if (!topbar.hasClass('expanded')) {
-            topbar.removeClass('fixed');
-            topbar.parent().removeClass('expanded');
-            self.update_sticky_positioning();
-          } else {
-            topbar.addClass('fixed');
-            topbar.parent().addClass('expanded');
-            self.S('body').addClass('f-topbar-fixed');
-          }
-        }
-      }
-    },
-
-    timer : null,
-
-    events : function (bar) {
-      var self = this,
-          S = this.S;
-
-      S(this.scope)
-        .off('.topbar')
-        .on('click.fndtn.topbar', '[' + this.attr_name() + '] .toggle-topbar', function (e) {
-          e.preventDefault();
-          self.toggle(this);
-        })
-        .on('click.fndtn.topbar contextmenu.fndtn.topbar', '.top-bar .top-bar-section li a[href^="#"],[' + this.attr_name() + '] .top-bar-section li a[href^="#"]', function (e) {
-            var li = $(this).closest('li'),
-                topbar = li.closest('[' + self.attr_name() + ']'),
-                settings = topbar.data(self.attr_name(true) + '-init');
-
-            if (settings.dropdown_autoclose && settings.is_hover) {
-              var hoverLi = $(this).closest('.hover');
-              hoverLi.removeClass('hover');
-            }
-            if (self.breakpoint() && !li.hasClass('back') && !li.hasClass('has-dropdown')) {
-              self.toggle();
-            }
-
-        })
-        .on('click.fndtn.topbar', '[' + this.attr_name() + '] li.has-dropdown', function (e) {
-          var li = S(this),
-              target = S(e.target),
-              topbar = li.closest('[' + self.attr_name() + ']'),
-              settings = topbar.data(self.attr_name(true) + '-init');
-
-          if (target.data('revealId')) {
-            self.toggle();
-            return;
-          }
-
-          if (self.breakpoint()) {
-            return;
-          }
-
-          if (settings.is_hover && !Modernizr.touch) {
-            return;
-          }
-
-          e.stopImmediatePropagation();
-
-          if (li.hasClass('hover')) {
-            li
-              .removeClass('hover')
-              .find('li')
-              .removeClass('hover');
-
-            li.parents('li.hover')
-              .removeClass('hover');
-          } else {
-            li.addClass('hover');
-
-            $(li).siblings().removeClass('hover');
-
-            if (target[0].nodeName === 'A' && target.parent().hasClass('has-dropdown')) {
-              e.preventDefault();
-            }
-          }
-        })
-        .on('click.fndtn.topbar', '[' + this.attr_name() + '] .has-dropdown>a', function (e) {
-          if (self.breakpoint()) {
-
-            e.preventDefault();
-
-            var $this = S(this),
-                topbar = $this.closest('[' + self.attr_name() + ']'),
-                section = topbar.find('section, .top-bar-section'),
-                dropdownHeight = $this.next('.dropdown').outerHeight(),
-                $selectedLi = $this.closest('li');
-
-            topbar.data('index', topbar.data('index') + 1);
-            $selectedLi.addClass('moved');
-
-            if (!self.rtl) {
-              section.css({left : -(100 * topbar.data('index')) + '%'});
-              section.find('>.name').css({left : 100 * topbar.data('index') + '%'});
-            } else {
-              section.css({right : -(100 * topbar.data('index')) + '%'});
-              section.find('>.name').css({right : 100 * topbar.data('index') + '%'});
-            }
-
-            topbar.css('height', $this.siblings('ul').outerHeight(true) + topbar.data('height'));
-          }
-        });
-
-      S(window).off('.topbar').on('resize.fndtn.topbar', self.throttle(function () {
-          self.resize.call(self);
-      }, 50)).trigger('resize.fndtn.topbar').load(function () {
-          // Ensure that the offset is calculated after all of the pages resources have loaded
-          S(this).trigger('resize.fndtn.topbar');
-      });
-
-      S('body').off('.topbar').on('click.fndtn.topbar', function (e) {
-        var parent = S(e.target).closest('li').closest('li.hover');
-
-        if (parent.length > 0) {
-          return;
-        }
-
-        S('[' + self.attr_name() + '] li.hover').removeClass('hover');
-      });
-
-      // Go up a level on Click
-      S(this.scope).on('click.fndtn.topbar', '[' + this.attr_name() + '] .has-dropdown .back', function (e) {
-        e.preventDefault();
-
-        var $this = S(this),
-            topbar = $this.closest('[' + self.attr_name() + ']'),
-            section = topbar.find('section, .top-bar-section'),
-            settings = topbar.data(self.attr_name(true) + '-init'),
-            $movedLi = $this.closest('li.moved'),
-            $previousLevelUl = $movedLi.parent();
-
-        topbar.data('index', topbar.data('index') - 1);
-
-        if (!self.rtl) {
-          section.css({left : -(100 * topbar.data('index')) + '%'});
-          section.find('>.name').css({left : 100 * topbar.data('index') + '%'});
-        } else {
-          section.css({right : -(100 * topbar.data('index')) + '%'});
-          section.find('>.name').css({right : 100 * topbar.data('index') + '%'});
-        }
-
-        if (topbar.data('index') === 0) {
-          topbar.css('height', '');
-        } else {
-          topbar.css('height', $previousLevelUl.outerHeight(true) + topbar.data('height'));
-        }
-
-        setTimeout(function () {
-          $movedLi.removeClass('moved');
-        }, 300);
-      });
-
-      // Show dropdown menus when their items are focused
-      S(this.scope).find('.dropdown a')
-        .focus(function () {
-          $(this).parents('.has-dropdown').addClass('hover');
-        })
-        .blur(function () {
-          $(this).parents('.has-dropdown').removeClass('hover');
-        });
-    },
-
-    resize : function () {
-      var self = this;
-      self.S('[' + this.attr_name() + ']').each(function () {
-        var topbar = self.S(this),
-            settings = topbar.data(self.attr_name(true) + '-init');
-
-        var stickyContainer = topbar.parent('.' + self.settings.sticky_class);
-        var stickyOffset;
-
-        if (!self.breakpoint()) {
-          var doToggle = topbar.hasClass('expanded');
-          topbar
-            .css('height', '')
-            .removeClass('expanded')
-            .find('li')
-            .removeClass('hover');
-
-            if (doToggle) {
-              self.toggle(topbar);
-            }
-        }
-
-        if (self.is_sticky(topbar, stickyContainer, settings)) {
-          if (stickyContainer.hasClass('fixed')) {
-            // Remove the fixed to allow for correct calculation of the offset.
-            stickyContainer.removeClass('fixed');
-
-            stickyOffset = stickyContainer.offset().top;
-            if (self.S(document.body).hasClass('f-topbar-fixed')) {
-              stickyOffset -= topbar.data('height');
-            }
-
-            topbar.data('stickyoffset', stickyOffset);
-            stickyContainer.addClass('fixed');
-          } else {
-            stickyOffset = stickyContainer.offset().top;
-            topbar.data('stickyoffset', stickyOffset);
-          }
-        }
-
-      });
-    },
-
-    breakpoint : function () {
-      return !matchMedia(Foundation.media_queries['topbar']).matches;
-    },
-
-    small : function () {
-      return matchMedia(Foundation.media_queries['small']).matches;
-    },
-
-    medium : function () {
-      return matchMedia(Foundation.media_queries['medium']).matches;
-    },
-
-    large : function () {
-      return matchMedia(Foundation.media_queries['large']).matches;
-    },
-
-    assemble : function (topbar) {
-      var self = this,
-          settings = topbar.data(this.attr_name(true) + '-init'),
-          section = self.S('section, .top-bar-section', topbar);
-
-      // Pull element out of the DOM for manipulation
-      section.detach();
-
-      self.S('.has-dropdown>a', section).each(function () {
-        var $link = self.S(this),
-            $dropdown = $link.siblings('.dropdown'),
-            url = $link.attr('href'),
-            $titleLi;
-
-        if (!$dropdown.find('.title.back').length) {
-
-          if (settings.mobile_show_parent_link == true && url) {
-            $titleLi = $('<li class="title back js-generated"><h5><a href="javascript:void(0)"></a></h5></li><li class="parent-link hide-for-medium-up"><a class="parent-link js-generated" href="' + url + '">' + $link.html() +'</a></li>');
-          } else {
-            $titleLi = $('<li class="title back js-generated"><h5><a href="javascript:void(0)"></a></h5>');
-          }
-
-          // Copy link to subnav
-          if (settings.custom_back_text == true) {
-            $('h5>a', $titleLi).html(settings.back_text);
-          } else {
-            $('h5>a', $titleLi).html('&laquo; ' + $link.html());
-          }
-          $dropdown.prepend($titleLi);
-        }
-      });
-
-      // Put element back in the DOM
-      section.appendTo(topbar);
-
-      // check for sticky
-      this.sticky();
-
-      this.assembled(topbar);
-    },
-
-    assembled : function (topbar) {
-      topbar.data(this.attr_name(true), $.extend({}, topbar.data(this.attr_name(true)), {assembled : true}));
-    },
-
-    height : function (ul) {
-      var total = 0,
-          self = this;
-
-      $('> li', ul).each(function () {
-        total += self.S(this).outerHeight(true);
-      });
-
-      return total;
-    },
-
-    sticky : function () {
-      var self = this;
-
-      this.S(window).on('scroll', function () {
-        self.update_sticky_positioning();
-      });
-    },
-
-    update_sticky_positioning : function () {
-      var klass = '.' + this.settings.sticky_class,
-          $window = this.S(window),
-          self = this;
-
-      if (self.settings.sticky_topbar && self.is_sticky(this.settings.sticky_topbar,this.settings.sticky_topbar.parent(), this.settings)) {
-        var distance = this.settings.sticky_topbar.data('stickyoffset') + this.settings.start_offset;
-        if (!self.S(klass).hasClass('expanded')) {
-          if ($window.scrollTop() > (distance)) {
-            if (!self.S(klass).hasClass('fixed')) {
-              self.S(klass).addClass('fixed');
-              self.S('body').addClass('f-topbar-fixed');
-            }
-          } else if ($window.scrollTop() <= distance) {
-            if (self.S(klass).hasClass('fixed')) {
-              self.S(klass).removeClass('fixed');
-              self.S('body').removeClass('f-topbar-fixed');
-            }
-          }
-        }
-      }
-    },
-
-    off : function () {
-      this.S(this.scope).off('.fndtn.topbar');
-      this.S(window).off('.fndtn.topbar');
-    },
-
-    reflow : function () {}
-  };
-}(jQuery, window, window.document));
+  this.element_.removeEventListener('mousedown',
+  this.boundDownHandler);
+  this.element_.removeEventListener('touchstart',
+      this.boundDownHandler);
+
+  this.element_.removeEventListener('mouseup', this.boundUpHandler);
+  this.element_.removeEventListener('mouseleave', this.boundUpHandler);
+  this.element_.removeEventListener('touchend', this.boundUpHandler);
+  this.element_.removeEventListener('blur', this.boundUpHandler);
+};
+
+// The component registers itself. It can assume componentHandler is available
+// in the global scope.
+componentHandler.register({
+  constructor: ffRipple,
+  classAsString: 'ffRipple',
+  cssClass: 'js-ripple-effect',
+  widget: false
+});
