@@ -15,6 +15,7 @@
  */
 .datatable {
   position: relative;
+  width: 100%;
   border: $data-table-dividers;
   border-collapse: collapse;
   white-space: nowrap;
@@ -61,7 +62,7 @@
 
   td {
     position: relative;
-    vertical-align: top;
+    vertical-align: middle;
     height: $data-table-row-height;
     border-top: $data-table-dividers;
     border-bottom: $data-table-dividers;
@@ -69,7 +70,7 @@
     box-sizing: border-box;
 
     .datatable-select {
-      vertical-align: top;
+      vertical-align: middle;
       position: absolute;
       left: 24px;
     }
@@ -99,5 +100,8 @@
 .datatable-cell{
     &.non-numeric {
       text-align: left;
+    }
+    &.justified {
+      text-align: center;
     }
 }
