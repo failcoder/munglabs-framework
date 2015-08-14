@@ -1,14 +1,13 @@
 {
   "name": "munglabs-framework",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "main": [
     "css/munglabs.min.css",
     "css/munglabs.min.css.map",
     "js/munglabs.min.js",
     "js/munglabs.min.js.map"
   ],
-  "ignore": [
-  ],
+  "ignore": [],
   "dependencies": {
     "jquery": ">= 2.1.0",
     "modernizr": ">= 2.7.2",
