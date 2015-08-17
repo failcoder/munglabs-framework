@@ -14,17 +14,10 @@
  *
  */
 .datatable {
-  position: relative;
-  width: 100%;
   border: $data-table-dividers;
-  border-collapse: collapse;
   white-space: nowrap;
-  font-size: 13px;
-  background-color: unquote("rgb(#{$color-white})");
 
   thead {
-    padding-bottom: 3px;
-
     .datatable-select {
       margin-top: 0;
     }
@@ -32,17 +25,8 @@
 
   tbody {
     tr {
-      position: relative;
-      height: $data-table-row-height;
-      @include ff-animation-default(0.28s);
-      transition-property: background-color;
-
       &.is-selected {
         background-color: $data-table-selection-color;
-      }
-
-      &:hover {
-        background-color: $data-table-hover-color;
       }
     }
   }
@@ -77,16 +61,6 @@
   }
 
   th {
-    position: relative;
-    vertical-align: bottom;
-    text-overflow: ellipsis;
-    @include typo-body-2();
-    height: $data-table-row-height;
-    font-size: 12px;
-    color: $data-table-header-color;
-    padding-bottom: 8px;
-    box-sizing: border-box;
-
     .datatable-select {
       position: relative;
     }

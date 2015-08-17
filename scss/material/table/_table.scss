@@ -1,0 +1,77 @@
+@import "../variables";
+@import "../mixins";
+/***
+ *     /$$             /$$      /$$
+ *    | $$            | $$     | $$
+ *  /$$$$$$   /$$$$$$| $$$$$$$| $$ /$$$$$$
+ *  |_  $$_/  |____  $| $$__  $| $$/$$__  $$
+ *    | $$     /$$$$$$| $$  \ $| $| $$$$$$$$
+ *    | $$ /$$/$$__  $| $$  | $| $| $$_____/
+ *    |  $$$$|  $$$$$$| $$$$$$$| $|  $$$$$$$
+ *     \___/  \_______|_______/|__/\_______/
+ *
+ *
+ *
+ */
+table {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  border: $table-borders;
+  border-collapse: collapse;
+  white-space: wrap;
+  font-size: 12px;
+  line-height: 16px;
+  background-color: unquote("rgb(#{$color-white})");
+  color: #000;
+  font-family: Helvetica Neue, Helvetica, Arial, sans-serif;
+
+  thead {
+    padding-bottom: 3px;
+  }
+
+  tbody {
+    tr {
+      position: relative;
+      height: $data-table-row-height;
+      @include ff-animation-default(0.28s);
+      transition-property: background-color;
+
+      &:hover {
+        background-color: $data-table-hover-color;
+      }
+    }
+  }
+
+  td, th {
+    position: relative;
+    padding: 6px;
+    margin: 0;
+    border: $table-borders;
+    height: $table-row-height;
+    box-sizing: border-box;
+  }
+
+  td {
+    vertical-align: middle;
+    text-align: left;
+  }
+
+  th {
+    vertical-align: bottom;
+    text-align: center;
+    text-overflow: ellipsis;
+    @include typo-body-2();
+    font-weight: bold;
+    color: $data-table-header-color;
+  }
+}
+
+@media (min-width: 40em) {
+  table {
+    font-size: 13px;
+  }
+  th {
+    font-size: 15px;
+  }
+}

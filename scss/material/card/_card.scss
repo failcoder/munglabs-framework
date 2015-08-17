@@ -1,21 +1,22 @@
 @import "../variables";
 
+.expand {
+  flex-grow: 1;
+}
+
 .card {
   display: flex;
   flex-direction: column;
   font-size: $card-font-size;
   font-weight: 400;
-  min-height: $card-height;
   overflow: hidden;
   width: $card-width;
+  height: $card-height;
   z-index: $card-z-index;
   position: relative;
   background: $card-background-color;
   border-radius: 2px;
   box-sizing: border-box;
-  &.expand {
-    flex-grow: 1;
-  }
 }
 
 .card-media {
@@ -29,11 +30,11 @@
 }
 
 .card-title {
-  align-items: center;
   color: $card-text-color;
   display: block;
   display: flex;
-  justify-content: stretch;
+  align-items: center;
+  align-content: stretch;
   line-height: normal;
   padding: $card-vertical-padding $card-horizontal-padding;
   perspective-origin: $card-title-perspective-origin-x $card-title-perspective-origin-y;
@@ -56,6 +57,12 @@
   overflow: hidden;
   transform-origin: $card-title-text-transform-origin-x $card-title-text-transform-origin-y;
   margin: 0;
+
+  &.justified {
+    width: 100%;
+    align-self: center;
+    justify-content: center;
+  }
 }
 
 .card-subtitle-text {
@@ -69,8 +76,8 @@
   font-size: $card-supporting-text-font-size;
   line-height: $card-supporting-text-line-height;
   overflow: hidden;
-  padding: $card-vertical-padding $card-horizontal-padding;
-  width: 90%;
+  width: 96%;
+  padding: 0.5% 2%;
 }
 
 .card-actions {
