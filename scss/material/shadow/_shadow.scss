@@ -13,6 +13,14 @@
  *
  *
  */
+.glow--inset {
+ @include inset-glow();
+}
+
+.glow--2dp {
+ @include glow-2dp();
+}
+
 .shadow--2dp {
   @include shadow-2dp();
 }

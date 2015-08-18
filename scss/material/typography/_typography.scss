@@ -82,6 +82,13 @@
     @include typo-body-1;
 
     margin-bottom: 16px;
+
+    &.preface {
+      border-bottom: $hinted-border;
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
   }
 
   a {
