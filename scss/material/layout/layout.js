@@ -240,11 +240,6 @@ ffLayout.prototype.init = function() {
       }
 
       if (child.classList &&
-          child.classList.contains(this.CssClasses_.DRAWER_BTN_ICON)) {
-        this.drawerButtonIcon_ = child;
-      }
-
-      if (child.classList &&
           child.classList.contains(this.CssClasses_.CONTENT)) {
         this.content_ = child;
       }
@@ -300,24 +295,35 @@ ffLayout.prototype.init = function() {
 
     // Add drawer toggling button to our layout, if we have an openable drawer.
     if (this.drawer_) {
-      var drawerButton = this.drawerButton_ || document.createElement('div');
-      drawerButton.classList.add(this.CssClasses_.DRAWER_BTN);
+      if (!this.drawerButton_) {
+        this.drawerButton_ = document.createElement('div');
+        this.drawerButton_.classList.add(this.CssClasses_.DRAWER_BTN);
+      }
 
       if (this.drawer_.classList.contains(this.CssClasses_.ON_LARGE_SCREEN)) {
         //If drawer has ON_LARGE_SCREEN class then add it to the drawer toggle button as well.
-        drawerButton.classList.add(this.CssClasses_.ON_LARGE_SCREEN);
+        this.drawerButton_.classList.add(this.CssClasses_.ON_LARGE_SCREEN);
       } else if (this.drawer_.classList.contains(this.CssClasses_.ON_SMALL_SCREEN)) {
         //If drawer has ON_SMALL_SCREEN class then add it to the drawer toggle button as well.
-        drawerButton.classList.add(this.CssClasses_.ON_SMALL_SCREEN);
+        this.drawerButton_.classList.add(this.CssClasses_.ON_SMALL_SCREEN);
+      }
+
+      var drawerChildren = this.drawerButton_.childNodes;
+      for (var c = 0; c < drawerChildren.length; c++) {
+        var drawerChild = drawerChildren[c];
+        console.log(drawerChild);
+        if (drawerChild.classList && drawerChild.classList.contains(this.CssClasses_.DRAWER_BTN_ICON)) {
+          this.drawerButtonIcon_ = drawerChild;
+        }
       }
 
       if (!this.drawerButtonIcon_) {
         var drawerButtonIcon = document.createElement('i');
         drawerButtonIcon.classList.add(this.CssClasses_.MENU_ICON);
         drawerButtonIcon.textContent = this.Constant_.MENU_ICON;
-        drawerButton.appendChild(drawerButtonIcon);
+        this.drawerButton_.appendChild(drawerButtonIcon);
       }
-      drawerButton.addEventListener('click',
+      this.drawerButton_.addEventListener('click',
           this.drawerToggleHandler_.bind(this));
 
       // Add a class if the layout has a drawer, for altering the left padding.
@@ -328,9 +334,9 @@ ffLayout.prototype.init = function() {
       // If we have a fixed header, add the button to the header rather than
       // the layout.
       if (this.element_.classList.contains(this.CssClasses_.FIXED_HEADER)) {
-        this.header_.insertBefore(drawerButton, this.header_.firstChild);
+        this.header_.insertBefore(this.drawerButton_, this.header_.firstChild);
       } else {
-        this.element_.insertBefore(drawerButton, this.content_);
+        this.element_.insertBefore(this.drawerButton_, this.content_);
       }
 
       var obfuscator = document.createElement('div');

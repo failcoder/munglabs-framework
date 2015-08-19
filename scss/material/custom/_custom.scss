@@ -11,13 +11,16 @@
  *
  *
  */
- header,
- section {
+ header {
      position: relative;
      width: 100%;
      height: auto;
      text-align: center;
      padding: 0;
+
+     @media (min-width: 40em) {
+       padding: 100px 0 50px;
+     }
  }
 
  section {
@@ -26,6 +29,10 @@
      height: auto;
      text-align: center;
      padding: 0;
+
+     @media (min-width: 40em) {
+       padding: 50px 0;
+     }
  }
 
  .border--top {
@@ -99,26 +106,19 @@
      max-width: 600px;
      height: auto;
    }
- }
 
-@media (min-width: 40em) {
-  header {
-    padding: 100px 0 50px;
-  }
-  section {
-    padding: 50px 0;
-  }
-  .container {
-    padding: $padding;
-    max-width: 80%;
-  }
-}
+   @media (min-width: 40em) {
+     padding: $padding;
+     max-width: 80%;
+   }
+ }
 
  .container-title {
    @include typo-display-2;
    text-align: center;
    margin-top: 24px;
    margin-bottom: 24px;
+   line-height: 1;
  }
 
  .container-subtitle {
@@ -126,6 +126,7 @@
    text-align: center;
    margin-top: 24px;
    margin-bottom: 16px;
+   line-height: 1;
  }
 
  .media-viewer {
@@ -167,25 +168,18 @@
    }
  }
 
- @media(max-width:1199px) {
- 	ul.banner-social-buttons {
- 		margin-top: 15px;
- 	}
+ .no-phone {
+   display: none;
+
+   @media (min-width: 40em) {
+   	display: block;
+   }
  }
 
- @media(max-width:767px) {
- 	.no-phone {
- 		display: none;
- 	}
- 	.pad-phone {
- 		padding: 50px 0 232px;
- 	}
- 	ul.banner-social-buttons li {
- 		display: block;
- 		margin-bottom: 20px;
- 		padding: 0;
- 		&:last-child {
- 			margin-bottom: 0;
- 		}
- 	}
+ .no-desktop {
+   display: block;
+
+   @media (min-width: 40em) {
+     display: none;
+   }
  }
